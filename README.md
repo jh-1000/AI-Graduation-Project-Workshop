@@ -10,9 +10,13 @@
 
 ---
 
-## 当前状态：P0 骨架
+## 当前状态：P0 收尾 + P1 数据与 UI 骨架
 
 这是一个**可运行的骨架**，不是完成品。已经打通的与尚未打通的，都如实列在下面——请不要按 `aidd-wiki/output/fe-demo/` 里那份 1877 行的设计原型来预期当前 UI，那只是设计稿。
+
+> **依赖说明**：`typescript` 已从 7.0.2 降到 **6.0.3**。TS 7 是原生编译器，不提供 Next.js 15 需要的 JS compiler API（`ts.sys` 为 `undefined`），会让 `next dev` / `next build` 在加载 `next.config.ts` 时直接失败（`Failed to load next.config.ts`）。降到 TS 6 后 `npm run build` 与 `npm run dev` 均已实测通过。若要回到 TS 7，需同时把 Next 升到 `>=16.2.11`。
+>
+> `src/app/api/projects/[id]/analyze/route.ts` 里的 `resolveTsxCli()` 按路径拼出 `node_modules/tsx/dist/cli.mjs`，而不是 `require.resolve("tsx/cli")`——后者会让 webpack 顺着 tsx → esbuild 把 `.d.ts` 打进 server bundle，构建必然失败。
 
 ### 已打通
 
@@ -20,21 +24,26 @@
 |---|---|
 | 项目导入（本地路径 / zip，含越界消毒、GBK 文件名、体积上限） | `src/lib/ingest.ts` |
 | 技术栈识别、文本文件判定、端点与路由静态抽取 | `src/lib/scan.ts` |
-| SQLite 迁移、19 张 P0 表、WAL + busy_timeout | `src/lib/db/` |
+| SQLite 迁移（`0001_init.sql` 19 张 + `0002_map_learning.sql` 6 张）、WAL + busy_timeout | `src/lib/db/` |
 | 任务状态机（六状态、合法转换表、幂等键、心跳、超时重跑） | `src/lib/tasks.ts` |
-| 独立 worker 子进程（断点续跑、分批、心跳、detached 派生） | `worker/worker.ts` |
-| LLM 客户端（缓存 / 重试 / zod 校验 / JSON 容错） | `src/lib/llm/client.ts` |
+| 独立 worker 子进程，两条阶段链（scan：scan→symbols→evidence；map：symbols→evidence→flows→nodes→terms→practice），断点续跑、分批、心跳、detached 派生、条件抢占 | `worker/worker.ts` |
+| 符号与静态证据落库（ts-morph 符号 / 正则端点与路由 → `symbols`、`evidence`，均带 `analysis_version`） | `src/lib/evidence.ts` |
+| 业务流程确定性追踪（端点 → handler → 请求 → 服务端 → 数据表 → 响应，六类锚点全部带 `file:line`，**不需要 API Key**） | `src/lib/flows.ts` |
+| LLM 分析层（节点 / 术语 / 练习，三套 zod schema；无 Key 时写 `open_questions` 并降级为空，绝不抛异常） | `src/lib/llm/analyze.ts` |
+| LLM 客户端（缓存 / 重试 / zod 校验 / JSON 容错）**已接入出站过滤器** | `src/lib/llm/client.ts` |
 | 出站过滤器（敏感文件排除、密钥遮蔽、SSRF 校验） | `src/lib/llm/{outbound,ssrf}.ts` |
-| Web UI：项目列表与导入、Scan 预览、设置页 | `src/app/` |
+| Web UI：项目列表与导入、项目分析页（证据卡 / 业务流程 / 知识节点 / 术语 / 自测题 / 定位挑战）、设置页 | `src/app/` |
 | 回归脚本 + T1–T6 技术验证 | `scripts/` |
 
 ### 尚未打通
 
-- **证据链未落库**：`symbols` / `evidence` / `claims` / `edges` / `terms` / `coverage_stats` 等 13 张表有 DDL 但**零写入者**。`extractSymbolsTs` 只在回归脚本里被调用，未接入产品路径。
-- **LLM 链路未接线**：`chatJSON` 与 `buildContext` 均为孤儿代码（全库零调用点），出站过滤器尚未接入客户端。
-- **worker 只有 scan 一个阶段**：设计文档里的 Map 十阶段流水线未实现。
-- **DDL 缺 P1–P3 表**：`nodes` / `flows` / `flow_steps` / `node_mastery` / `grill_sessions` / `challenges` 等均未建。
+- **LLM 阶段从未真实跑过**：`settings` 表 0 行，API Key 从未配置。节点 / 术语 / 练习三个区块在无 Key 时为空，并在 `open_questions` 记录原因——这是设计内降级，不是失败。
+- **结论层仍是零写入者**：`claims` / `claim_evidence` / `claim_dependencies` / `edges` / `coverage_stats` / `repo_insights` / `history_events` 均无写入代码；`flow_steps.evidence_id` 与 `practice_items.evidence_id` 列已建但未写入。
+- **失效传播未实现**：DES-evidence 点名的 `src/lib/invalidation.ts` 不存在；`symbols` 与 `evidence` 之间无连接键（见 `aidd-wiki/Decision-Register.md` D-1）。
+- **Map 十阶段只实现了五段**：架构总览 / 模块深挖 / 建边 / 体检 / git 考古 / 双重校验 / 六维覆盖均未实现；选料用「取 loc 最大的 20 个已解析文件」而非 PageRank（`src/lib/repomap.ts` 不存在）。
+- **P3–P5 表未建**：`node_mastery` / `learning_attempts` / `grill_sessions` / `challenges` / `challenge_runs` 等均无。
 - **无 lockfile 解析**、`src/` 内未使用 tree-sitter（仅验证脚本使用）。
+- **UI 只做过一次实机走查**：在 `/project/35`（fixture1 项目）上跑过一次 map，五个区块正常渲染；未做多项目、大仓库、窄屏与错误态的系统走查。
 
 ---
 
@@ -60,7 +69,7 @@ npm run worker       # 另开一个终端：分析任务 worker（手动调试�
 | `npm run build` / `npm start` | 生产构建与启动 |
 | `npm run worker` | 启动 worker 子进程（`tsx worker/worker.ts`） |
 | `npm run typecheck` | `tsc --noEmit`，TypeScript strict |
-| `npm run regression` | fixture1 回归：导入 → 扫描 → 符号抽取 → 任务恢复 |
+| `npm run regression` | fixture1 回归：导入 → 扫描 → 符号/证据落库 → 业务流程追踪 → 任务恢复 |
 | `npm run verify` | T1–T6 技术验证（tree-sitter / 并发 / LLM 结构化 / 备份 / SSRF / 中文 zip） |
 
 `verify` 中 **T3 与 C4 在未配置 API Key 时为 SKIP**，不是通过。
@@ -81,7 +90,8 @@ SQLite（data/app.db，WAL）
   │  短事务写 + 心跳
 worker 子进程（worker/worker.ts，detached）
   │
-  └─ 静态分析：ts-morph / web-tree-sitter / 正则；LLM 阶段（待接线）
+  └─ scan 链：ts-morph / 正则 → symbols / evidence
+     map 链：确定性业务流 → LLM 节点 / 术语 / 练习（无 Key 降级）
 ```
 
 设计要点：
@@ -96,16 +106,18 @@ worker 子进程（worker/worker.ts，detached）
 ## 目录结构
 
 ```
-src/app/            Next.js 页面与 API 路由（6 个 API、3 个页面）
+src/app/            Next.js 页面与 API 路由（11 个 API、3 个页面）
 src/lib/
   ingest.ts         路径 / zip 导入与安全校验
   scan.ts           技术栈识别、端点与路由抽取
   symbols.ts        ts-morph 符号抽取
+  evidence.ts       符号与静态证据落库
+  flows.ts          业务流程确定性追踪与落库
   tasks.ts          任务状态机、幂等键、心跳、恢复
   settings.ts       设置读写（密钥只写不读、掩码返回）
-  db/               连接、迁移、0001_init.sql（19 张表）
-  llm/              client.ts（缓存/重试/zod）、outbound.ts（出站过滤）、ssrf.ts
-worker/worker.ts    分析 worker（当前仅 scan 阶段）
+  db/               连接、迁移、0001_init.sql（19 张）+ 0002_map_learning.sql（6 张）
+  llm/              client.ts（缓存/重试/zod/出站接线）、analyze.ts（节点/术语/练习 + 降级）、outbound.ts、ssrf.ts
+worker/worker.ts    分析 worker（scan 链 3 阶段 / map 链 6 阶段）
 scripts/            regression.ts + verify/（T1–T6 与 C 组闭环）
 fixtures/           fixture1-todo-clip + fixture1-expected.json
 aidd-wiki/          AIDD 方法论文档体系（需求 / 设计 / 标准 / 计划）
@@ -117,6 +129,7 @@ data/               运行时数据（git 忽略）：app.db、备份、workspac
 ## 文档
 
 - 项目定位与范围：`aidd-wiki/overview.md`
+- 延期与不确定决策登记：`aidd-wiki/Decision-Register.md`
 - 需求图谱（8 个 L1 模块 / 17 个 L3 点）：`aidd-wiki/01-Requirements/Requirements-Graph.md`
 - 设计文档与规范：`aidd-wiki/02-Design/`
 - **项目不变量（改动前必读）**：`aidd-wiki/_slots/project-invariants.md`
@@ -131,8 +144,8 @@ data/               运行时数据（git 忽略）：app.db、备份、workspac
 
 | 阶段 | 内容 |
 |---|---|
-| **P0**（当前） | 技术验证 T1–T6、最小闭环 C1–C5、脚手架、导入、Scan 预览、fixture#1、回归雏形 |
-| P1 | 一条真实业务流端到端追踪 + 证据卡 + 术语 chip + 一道自测题 + 一个定位挑战 |
+| **P0**（已完成） | 技术验证 T1–T6、最小闭环 C1–C5、脚手架、导入、Scan 预览、fixture#1、回归雏形 |
+| **P1**（数据与 UI 骨架已完成，待填 Key 验证 LLM 产出） | 一条真实业务流端到端追踪 + 证据卡 + 术语 chip + 一道自测题 + 一个定位挑战 |
 | P2 | 分析底座：worker 持久化 / 幂等 / 预算 / 缓存 / 版本与失效传播 / 选料 / 整库引用图 / lockfile / 六维覆盖 / 双重校验 |
 | P3 | 学习体验：讲解、主动回忆、FSRS 复习、能力雷达 |
 | P4 | 答辩演练：一次一问、双轴评分、薄弱点报告 |

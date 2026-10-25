@@ -1,7 +1,7 @@
 /** T6：Windows 兼容——中文文件名 zip 导入与内容正确性 */
 import path from "node:path";
 import AdmZip from "adm-zip";
-import { getDb } from "../../src/lib/db";
+import { deleteProjectData, getDb } from "../../src/lib/db";
 import { importFromZip } from "../../src/lib/ingest";
 
 export async function run(): Promise<{ status: "pass" | "fail" | "skip"; detail: string }> {
@@ -20,11 +20,8 @@ export async function run(): Promise<{ status: "pass" | "fail" | "skip"; detail:
       .all(r.projectId) as { path: string }[];
     const has = (p: string) => rows.some((x) => x.path === p);
 
-    // 清理
-    db.prepare("DELETE FROM run_files WHERE project_id = ?").run(r.projectId);
-    db.prepare("DELETE FROM files WHERE project_id = ?").run(r.projectId);
-    db.prepare("DELETE FROM analysis_runs WHERE project_id = ?").run(r.projectId);
-    db.prepare("DELETE FROM projects WHERE id = ?").run(r.projectId);
+    // 清理：统一走 deleteProjectData（含 P1 新增的 flows/nodes/terms/practice 等表）
+    deleteProjectData(r.projectId);
 
     if (has("src/数据/任务页面.txt") && has("src/阅读我.md")) {
       return { status: "pass", detail: `中文条目名解码正确：${rows.map((x) => x.path).join(", ")}` };

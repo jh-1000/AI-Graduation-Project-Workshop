@@ -57,3 +57,9 @@
 ## [2026-10-25 12:47:50] design | create | OSS 复用地图审计（用户要求查重）：8 处正式版替换（AI SDK/CodeMirror 6/graphology/sqlite-vec 等）、6 处不引入警戒线；验证 AI SDK GLM 支持与 sqlite-vec×better-sqlite3
 
 ## [2026-10-25 12:57:38] spec | update | platform/storage SPEC 增补 F-5 缓存与花费统计（用户确认加入待办，P2 实施）
+
+## [2026-10-25 19:26:20] be-dev | create | 证据写入链路落地（BE-evidence）：新增 src/lib/evidence.ts，worker 改三阶段 scan/symbols/evidence 并改条件抢占，regression/c-loop/t6-zip cleanup 重排与落库断言；同时新建 Decision-Register.md 登记 D-1/D-2/D-3/U-1
+
+## [2026-10-25 20:52:05] fe-dev | create | P1 最小闭环落地（FE-p1-loop）：0002_map_learning.sql 建 6 张表并给 symbols 补 analysis_version；新增 flows.ts 确定性业务流追踪、llm/analyze.ts（三 zod schema + 无 Key 降级写 open_questions）、client.ts 接入出站过滤器；worker 改双链 SCAN/MAP；新增 5 个只读端点与项目页证据卡/业务流/节点/术语/练习五区块；regression 增 flows 与符号版本断言；D-1 前半标记部分解决
+
+## [2026-10-25 21:29:51] fe-dev | update | 构建阻塞解除并完成浏览器实机走查：typescript 7.0.2 → 6.0.3（package.json + lockfile），next build / next dev 均通过；analyze/route.ts 的 require.resolve("tsx/cli") 改为 resolveTsxCli() 按路径解析，避免 webpack 打包 esbuild 的 .d.ts；实机走查 /project/35 跑通 map-v1 并渲染证据卡/业务流程/节点/术语/练习五区块；修掉不存在项目时整页 Application error（load() 未检查 res.ok）

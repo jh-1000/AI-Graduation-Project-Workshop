@@ -10,15 +10,41 @@
   ],
   "endpoints": ["GET /api/tasks", "POST /api/tasks", "PATCH /api/tasks/:id"],
   "symbols": ["formatDate", "TasksPage", "handleSubmit"],
+  "symbolLocations": {
+    "formatDate": { "file": "src/utils/format.ts", "line": 1 },
+    "TasksPage": { "file": "src/web/TasksPage.tsx", "line": 4 },
+    "handleSubmit": { "file": "src/web/TasksPage.tsx", "line": 8 }
+  },
   "stackContains": ["express", "javascript"],
+  "flows": [
+    {
+      "slug": "post-api-tasks",
+      "steps": [
+        { "title": "用户触发前端事件", "file": "src/web/TasksPage.tsx", "line": 30, "note": "onClick" },
+        { "title": "handleSubmit 组装请求", "file": "src/web/TasksPage.tsx", "line": 8, "note": "handler" },
+        { "title": "发起 POST /api/tasks", "file": "src/web/TasksPage.tsx", "line": 11, "note": "request" },
+        { "title": "服务端处理 POST /api/tasks", "file": "src/server/index.ts", "line": 12, "note": "endpoint" },
+        { "title": "读写 tasks 表", "file": "src/db/schema.sql", "line": 1, "note": "table" },
+        { "title": "返回响应", "file": "src/server/index.ts", "line": 18, "note": "response" }
+      ]
+    },
+    {
+      "slug": "patch-api-tasks",
+      "steps": [
+        { "title": "服务端处理 PATCH /api/tasks/:id", "file": "src/server/index.ts", "line": 22, "note": "endpoint" },
+        { "title": "读写 tasks 表", "file": "src/db/schema.sql", "line": 1, "note": "table" },
+        { "title": "返回响应", "file": "src/server/index.ts", "line": 23, "note": "response" }
+      ]
+    }
+  ],
   "flow": {
     "name": "添加任务",
     "steps": [
-      { "step": "点击「添加任务」按钮", "evidence": "src/web/TasksPage.tsx:31" },
-      { "step": "handleSubmit 发起请求", "evidence": "src/web/TasksPage.tsx:9" },
-      { "step": "POST /api/tasks", "evidence": "src/server/index.ts:12" },
-      { "step": "写入 tasks 表", "evidence": "src/db/schema.sql:1" },
-      { "step": "返回创建结果", "evidence": "src/server/index.ts:20" }
+      { "title": "点击「添加任务」按钮", "evidence": "src/web/TasksPage.tsx:31" },
+      { "title": "handleSubmit 发起请求", "evidence": "src/web/TasksPage.tsx:9" },
+      { "title": "服务端 POST /api/tasks", "evidence": "src/server/index.ts:12" },
+      { "title": "写入 tasks 表", "evidence": "src/db/schema.sql:1" },
+      { "title": "返回创建结果", "evidence": "src/server/index.ts:20" }
     ]
   }
 }

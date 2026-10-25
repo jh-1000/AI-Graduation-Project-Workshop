@@ -10,6 +10,7 @@ date: 2026-10-25
 |------|-------------|
 | [[overview]] | Project overview |
 | [[_slots/project-invariants]] | Cross-phase invariants |
+| [[Decision-Register]] | DEFERRED / DEPENDENCY_UNCERTAIN decisions (7-field register) |
 | [[_slots/coding-prefs]] | Coding preferences |
 | [[_pending/]] | Staged multi-file writes before promote |
 | [[handoffs/]] | Cross-session handoffs |

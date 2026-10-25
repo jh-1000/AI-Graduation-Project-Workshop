@@ -2,7 +2,7 @@
 import { spawn, execSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
-import { getDb } from "../../src/lib/db";
+import { deleteProjectData, getDb } from "../../src/lib/db";
 import { importFromPath } from "../../src/lib/ingest";
 import { extractSymbolsTs } from "../../src/lib/symbols";
 import { createRun, recoverStaleRuns, getRun } from "../../src/lib/tasks";
@@ -21,10 +21,7 @@ function cleanup() {
   const db = getDb();
   const p = db.prepare("SELECT id FROM projects WHERE slug = ?").get(SLUG) as { id: number } | undefined;
   if (!p) return;
-  db.prepare("DELETE FROM run_files WHERE project_id = ?").run(p.id);
-  db.prepare("DELETE FROM files WHERE project_id = ?").run(p.id);
-  db.prepare("DELETE FROM analysis_runs WHERE project_id = ?").run(p.id);
-  db.prepare("DELETE FROM projects WHERE id = ?").run(p.id);
+  deleteProjectData(p.id);
 }
 
 function spawnWorker(runId: number, extra: string[] = []) {

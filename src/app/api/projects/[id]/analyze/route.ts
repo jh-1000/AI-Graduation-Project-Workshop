@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import { getDb } from "@/lib/db";
 import { createRun, recoverStaleRuns } from "@/lib/tasks";
+
+// tsx 是 devDependency，运行时只需要它的 CLI 文件路径。这里按路径拼接而不是 require.resolve：
+// require.resolve 会让 webpack 顺着 tsx → esbuild 把 .d.ts 打进 server bundle，而 ESM 包又不允许
+// 用 CJS 的 require.resolve 引用，两种做法都会让 next build 失败。
+function resolveTsxCli(): string {
+  const candidates = ["dist/cli.mjs", "dist/cli.cjs"].map((rel) =>
+    path.join(process.cwd(), "node_modules", "tsx", rel)
+  );
+  for (const c of candidates) if (fs.existsSync(c)) return c;
+  throw new Error("找不到 tsx CLI：请先 npm install（tsx 在 devDependencies 中）");
+}
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -14,11 +27,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const recovered = recoverStaleRuns();
   void recovered;
 
-  const body = (await req.json().catch(() => ({}))) as { idemKey?: string };
-  const runId = createRun(projectId, "scan", body.idemKey);
+  const body = (await req.json().catch(() => ({}))) as { idemKey?: string; kind?: string };
+  // kind=map 走完整分析链（evidence → flows → nodes → terms → practice）；缺省仍是 scan
+  const kind = body.kind === "map" ? "map" : "scan";
+  const runId = createRun(projectId, kind, body.idemKey);
 
   // 派生 worker 子进程（detached：浏览器关闭不影响任务）；直接 node + tsx/cli，绕过 npx
-  const tsxCli = require.resolve("tsx/cli");
+  const tsxCli = resolveTsxCli();
   const child = spawn(
     process.execPath,
     [tsxCli, "worker/worker.ts", "--run-id", String(runId)],

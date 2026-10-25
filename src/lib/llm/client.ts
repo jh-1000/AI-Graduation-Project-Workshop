@@ -3,6 +3,7 @@ import type { z } from "zod";
 import { getDb } from "../db";
 import { getApiKeyInternal, getLlmSettings } from "../settings";
 import { assertUrlAllowed } from "./ssrf";
+import { buildContext, type ContextPart } from "./outbound";
 
 function sha256(s: string): string {
   return crypto.createHash("sha256").update(s).digest("hex");
@@ -97,6 +98,17 @@ export type ChatJsonOptions<T> = {
   user: string;
   schema: z.ZodType<T>;
   maxRetries?: number;
+  /** 需要随请求发送的项目文件：统一过出站过滤器（敏感文件排除 + 密钥遮蔽 + 限长） */
+  context?: ContextPart[];
+  /** 上下文上限，缺省取设置里的 maxContextChars */
+  maxContextChars?: number;
+};
+
+export type OutboundTrace = {
+  included: string[];
+  excluded: string[];
+  redactions: number;
+  truncated: boolean;
 };
 
 /**
@@ -107,15 +119,29 @@ export async function chatJSON<T>(opts: ChatJsonOptions<T>): Promise<{
   data: T;
   cached: boolean;
   cacheKey: string;
+  outbound?: OutboundTrace;
 }> {
   const s = getLlmSettings();
-  const raw = `SYSTEM:\n${opts.system}\nUSER:\n${opts.user}`;
+  // Auth-L1b：项目内容一律先过出站过滤器，绝不把原始文件直接拼进提示词
+  let outbound: OutboundTrace | undefined;
+  let userContent = opts.user;
+  if (opts.context && opts.context.length > 0) {
+    const built = buildContext(opts.context, opts.maxContextChars ?? s.maxContextChars);
+    userContent = `${opts.user}\n\n${built.text}`;
+    outbound = {
+      included: built.included,
+      excluded: built.excluded,
+      redactions: built.redactions,
+      truncated: built.truncated,
+    };
+  }
+  const raw = `SYSTEM:\n${opts.system}\nUSER:\n${userContent}`;
   const cacheKey = sha256(
     JSON.stringify({ raw: sha256(raw), model: s.model, temperature: s.temperature })
   );
   const hit = cacheGet(cacheKey);
   if (hit) {
-    return { data: opts.schema.parse(JSON.parse(extractJson(hit))), cached: true, cacheKey };
+    return { data: opts.schema.parse(JSON.parse(extractJson(hit))), cached: true, cacheKey, outbound };
   }
 
   const maxRetries = opts.maxRetries ?? 2;
@@ -125,7 +151,7 @@ export async function chatJSON<T>(opts: ChatJsonOptions<T>): Promise<{
       const text = await callChatApi(
         [
           { role: "system", content: opts.system },
-          { role: "user", content: opts.user },
+          { role: "user", content: userContent },
         ],
         s.temperature
       );
@@ -136,7 +162,7 @@ export async function chatJSON<T>(opts: ChatJsonOptions<T>): Promise<{
       } catch {
         // 缓存写入失败不作废结果，仅放弃缓存
       }
-      return { data, cached: false, cacheKey };
+      return { data, cached: false, cacheKey, outbound };
     } catch (err) {
       lastErr = err;
       if (attempt < maxRetries) {

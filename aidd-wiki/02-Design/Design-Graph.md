@@ -36,6 +36,12 @@ date: 2026-10-25
 | platform | [[01-Requirements/modules/platform/platform\|platform]] |
 | regression | [[01-Requirements/modules/regression/regression\|regression]] |
 
+### UI 细化（开发阶段补充）
+
+| 模块 | UI | 代码落点 | 状态 |
+|------|-----|----------|------|
+| analysis | [[modules/analysis/ui/p1-loop/UI\|P1 最小闭环]] | `src/app/project/[id]/page.tsx` | active |
+
 ### 设计总览
 
 - [[01-Requirements/Requirements-Graph|Requirements Graph]]
