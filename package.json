@@ -9,7 +9,8 @@
     "worker": "tsx worker/worker.ts",
     "typecheck": "tsc --noEmit",
     "regression": "tsx scripts/regression.ts",
-    "verify": "tsx scripts/verify/run-all.ts"
+    "verify": "tsx scripts/verify/run-all.ts",
+    "test": "playwright test"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.78",
@@ -28,6 +29,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^9.6.0",

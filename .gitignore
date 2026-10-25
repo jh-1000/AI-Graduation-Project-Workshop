@@ -5,3 +5,5 @@ data/
 next-env.d.ts
 npm-debug.log*
 .npm-cache/
+playwright-report/
+test-results/

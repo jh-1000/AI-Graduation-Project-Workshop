@@ -63,3 +63,9 @@
 ## [2026-10-25 20:52:05] fe-dev | create | P1 最小闭环落地（FE-p1-loop）：0002_map_learning.sql 建 6 张表并给 symbols 补 analysis_version；新增 flows.ts 确定性业务流追踪、llm/analyze.ts（三 zod schema + 无 Key 降级写 open_questions）、client.ts 接入出站过滤器；worker 改双链 SCAN/MAP；新增 5 个只读端点与项目页证据卡/业务流/节点/术语/练习五区块；regression 增 flows 与符号版本断言；D-1 前半标记部分解决
 
 ## [2026-10-25 21:29:51] fe-dev | update | 构建阻塞解除并完成浏览器实机走查：typescript 7.0.2 → 6.0.3（package.json + lockfile），next build / next dev 均通过；analyze/route.ts 的 require.resolve("tsx/cli") 改为 resolveTsxCli() 按路径解析，避免 webpack 打包 esbuild 的 .d.ts；实机走查 /project/35 跑通 map-v1 并渲染证据卡/业务流程/节点/术语/练习五区块；修掉不存在项目时整页 Application error（load() 未检查 res.ok）
+
+## [2026-10-25 23:34:36] fe-test | create | 前端验收计划入库（FE-PW-PLAN-p1-loop，草稿）：范围 = 项目详情页五区块 + 错误态，基线 project 37；记录 Playwright 环境真相（npm 未装 / Python 1.61.0 已装 / ms-playwright 缓存 1.39GB 含 chromium-1228 与 1243，无需下载）；同步 FE-p1-loop 增「待测清单」T1–T7 与 05-Test-Tasks 索引
+
+## [2026-10-26 00:29:39] fe-test | create | 前端验收执行完成（FE-TEST-p1-loop）：安装 @playwright/test@1.61.0（复用本机 chromium-1228 缓存，未下载浏览器），新增 playwright.config.ts 与 e2e/p1-loop.spec.ts（6 用例 S1–S5、S7）；跑测 6 passed（14.4s），负向对照把 S3 末步断言改为 src/server/index.ts:999 得 1 failed 后改回复跑 6 passed；FE-PW-PLAN-p1-loop 状态转「已执行」，05-Test-Tasks 索引与 Evidence 同步
+
+## [2026-10-26 01:25:25] commit | create | 发布记录 REL-2026-10-26：fe-test 执行批次（Playwright 6/6 + 负向对照 + @playwright/test 依赖 + npm test + FE-PW-PLAN 转已执行 + FE-TEST-p1-loop 入库）；BE-TEST 未做按闸门记录原因与风险

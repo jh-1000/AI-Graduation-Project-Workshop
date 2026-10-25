@@ -26,6 +26,7 @@ date: 2026-10-25
 | [[03-Code/]] | Modules, layout, key implementation notes |
 | [[04-Dev-Tasks/]] | Development task list |
 | [[05-Test-Tasks/]] | FE/BE acceptance plans, test assets, and execution records |
+| [[06-发布/]] | Release records (REL) |
 | [[archive/]] | Superseded / swept pages |
 | `raw/` | Source materials (read-only) |
 | `output/` | Session outputs and reports |

@@ -71,8 +71,10 @@ npm run worker       # 另开一个终端：分析任务 worker（手动调试�
 | `npm run typecheck` | `tsc --noEmit`，TypeScript strict |
 | `npm run regression` | fixture1 回归：导入 → 扫描 → 符号/证据落库 → 业务流程追踪 → 任务恢复 |
 | `npm run verify` | T1–T6 技术验证（tree-sitter / 并发 / LLM 结构化 / 备份 / SSRF / 中文 zip） |
+| `npm test` | Playwright 前端验收（`playwright test`，用例在 `e2e/p1-loop.spec.ts`） |
 
 `verify` 中 **T3 与 C4 在未配置 API Key 时为 SKIP**，不是通过。
+`npm test` 需要先有一个已扫过的项目作为基线（跑一次 `npm run regression` 即可），并用 `npm run dev` 起服务；无头 chromium 复用本机 playwright 缓存，不会下载浏览器。
 
 ---
 

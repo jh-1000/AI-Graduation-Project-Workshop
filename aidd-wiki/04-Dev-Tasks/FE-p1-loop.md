@@ -53,6 +53,24 @@ batch: P1 最小闭环
 - 5 个只读端点实测均 200：`evidence` 返回 `{evidence:3, symbols:3, analysisVersion:"scan-v1"}`；`flows` 返回 2 条（`post-api-tasks` 6 步，末步 `src/server/index.ts:18`）；`nodes` / `terms` / `practice` 空数组（无 Key）
 - 自测发现并修掉 3 个缺陷：① 真实仓库多个同名端点导致 `flows` UNIQUE 冲突（`detectFlows` 与 `persistFlows` 双层按 slug 去重）；② map 链初版漏 `symbols` 阶段（跑 map 后 symbols=0，已补）；③ `evidence` 端点的 symbols 查询未按版本过滤（symbols 加版本列后会跨版本混读，已加 `AND s.analysis_version = ?`）
 
+## 待测清单
+
+前端验收计划见 [[05-Test-Tasks/specs/FE-PW-PLAN-p1-loop|FE-PW-PLAN-p1-loop]]（状态：已执行），执行记录见 [[05-Test-Tasks/FE-TEST-p1-loop|FE-TEST-p1-loop]]：**6 passed（14.4s），T1–T6 全 PASS，T7 因 `practice_items=0` 未验证**。本节的清单是该计划的最小摘要，改代码时以此为准（改代码后须重跑 `npx playwright test`）。
+
+| ID | 待测点 | 期望（可观测） | 依据 |
+| --- | --- | --- | --- |
+| T1 | 页头三总状态 | `h1` = `项目分析`；常驻 `初步清单 · 不代表完整分析` | `src/app/project/[id]/page.tsx:204`、`:206` |
+| T2 | 证据卡 | 副标题 `版本 scan-v1 · 证据 3 条 · 符号 3 个`；三条证据 `index.ts:7`↔`GET`、`:12`↔`POST`、`:22`↔`PATCH`，各带 `static_analyzer` / `extracted` / `current` 三徽标；符号 chip 带 `file:line` | `page.tsx:304-344` |
+| T3 | 业务流程 | `业务流程（2）`；`post-api-tasks` 6 步 seq 1→6、末步 `src/server/index.ts:18`；`patch-api-tasks` 3 步；状态徽标 `draft` | `page.tsx:346-380` |
+| T4 | 三区块空态 | `知识节点（0）` 含 `API Key`；`术语卡片（0）` 含 `需模型生成`；`自测题（0）` / `定位挑战（0）` 含 `需模型生成` | `page.tsx:386-389`、`:418-419`、`:446`、`:472` |
+| T5 | 错误态 | `/project/<不存在 id>` 显示 `项目 <id> 不存在或已被删除`，且**不出现** `Application error` | `page.tsx:139`、`:191` |
+| T6 | 版本一致性 | `/api/projects/<id>/evidence` 不带 `version` 时返回的 `analysisVersion` 与页面副标题一致 | `src/app/api/projects/[id]/evidence/route.ts:12-20` |
+| T7 | 揭示交互（人工） | 点 `查看答案` 前答案不可见、点击后可见且按钮变 `收起答案`；`揭示位置` 同理 | `page.tsx:455-461`、`:478-484`；**当前 `practice_items=0`，未验证** |
+
+基线：项目 **id=37（slug `regression-fixture1`）**，`symbols=3` / `evidence=3` / `flows=2` / `flow_steps=9` / `nodes=0` / `terms=0` / `practice_items=0` / `settings=0`。id=39（`c-loop-fixture1`）`flows=0`，不能作业务流程基线。
+
+不允许弱化的断言见计划文件「不允许弱化的断言」一节（A1–A6）。
+
 ## 延期与风险
 
 - D-1 已部分解决：`symbols` 现在有 `analysis_version` 列并随 run 写入；仍未解决的是 `symbols` 与 `evidence` 之间没有连接键（见 [[Decision-Register|Decision-Register]]）。
