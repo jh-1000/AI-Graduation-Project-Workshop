@@ -1,0 +1,1877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>软件项目分析学习系统 · 可交互 Demo</title>
+<!--
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ 设计方案（frontend-design 双 pass 定稿）                              │
+  │ 主题：给 AI 辅助开发者的「项目 X 光机 + 答辩训练场」                   │
+  │ 视觉方向：工程蓝图 × 答题卡批改                                       │
+  │   · 图纸冷白底 #F7F9FC + 藏青墨线 #1B2A4A（来自"看懂代码结构"的世界）  │
+  │   · 批改红 #C43D3D（阅卷/质疑/待复核） · 验证绿 #2E7D4F（测试通过）    │
+  │   · 证据琥珀 #B7791F（证据标签/推断标记）                             │
+  │ 签名元素：地铁站点式业务流程线——五站四动作，"考考我"站点翻面          │
+  │ 反俗套自审：非米色赤陶 / 非暗底荧光绿 / 非报纸 hairline；              │
+  │   网格底纹有"工程测量"语义；卡片=档案卡带证据编号                      │
+  │ 字体：系统栈（便携目标，无网络字体），个性靠编号系统与批改标记          │
+  └─────────────────────────────────────────────────────────────────────┘
+-->
+<style>
+:root{
+  --paper:#F7F9FC; --ink:#1B2A4A; --grid:#DCE4F0; --line:#B9C6DC;
+  --mark-red:#C43D3D; --pass-green:#2E7D4F; --evidence-amber:#B7791F;
+  --card:#FFFFFF; --muted:#5B6B85;
+  --mono:ui-monospace,"Cascadia Code",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink);background:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px;
+}
+a{color:inherit;text-decoration:none}
+.app{display:flex;min-height:100vh}
+/* ── 左侧档案索引 ─────────────────────────── */
+.side{
+  width:212px;flex-shrink:0;background:var(--ink);color:#E8EDF6;
+  padding:20px 0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+}
+.side .logo{padding:0 20px 16px;border-bottom:1px solid rgba(255,255,255,.15)}
+.side .logo b{font-size:15px;letter-spacing:2px;display:block}
+.side .logo span{font-size:11px;color:#8FA1C0}
+.side nav{padding:14px 10px;display:flex;flex-direction:column;gap:2px;flex:1}
+.side nav a{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;
+  font-size:13px;color:#B9C6DC;border-left:3px solid transparent;
+}
+.side nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.side nav a.on{background:rgba(255,255,255,.1);color:#fff;border-left-color:#C43D3D}
+.side nav a .no{font-family:var(--mono);font-size:10px;color:#8FA1C0;width:28px}
+.side .foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,.15);font-size:11px;color:#8FA1C0;line-height:1.8}
+.side .foot b{color:#E8EDF6;font-family:var(--mono)}
+/* ── 主区 ─────────────────────────── */
+.main{flex:1;padding:28px 44px 60px;max-width:1680px;margin:0 auto;width:100%;min-width:0}
+/* 专注模式：隐藏侧栏，铺满全屏 */
+body.focus .side{display:none}
+body.focus .main{max-width:none;padding:22px 36px}
+.focusbtn{margin-top:12px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#B9C6DC;border-radius:6px;padding:6px;font-size:11.5px;cursor:pointer}
+.focusbtn:hover{background:rgba(255,255,255,.16);color:#fff}
+.exitfocus{display:none;position:fixed;top:14px;right:20px;z-index:70;background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+body.focus .exitfocus{display:block}
+.screen{display:none;animation:fadein .25s ease}
+.screen.on{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h1.t{font-size:22px;letter-spacing:1px}
+.sub{color:var(--muted);font-size:13px;margin-top:6px;line-height:1.7}
+.crumb{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:8px}
+/* 档案卡 */
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 1px 0 rgba(27,42,74,.06)}
+.card .hd{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--grid)}
+.card .hd .file-no{font-family:var(--mono);font-size:11px;color:var(--evidence-amber);letter-spacing:1px}
+.card .hd b{font-size:14px}
+.card .hd .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card .bd{padding:16px 18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}.side{width:64px}.side .logo b,.side nav a span{display:none}}
+/* 徽标 */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600}
+.b-src{background:#E8F0E9;color:var(--pass-green)}      /* 源码事实 */
+.b-infer{background:#FBF3E4;color:var(--evidence-amber)} /* 静态推断 */
+.b-ai{background:#EEF1F8;color:#5B6BC0}                  /* AI 解释 */
+.b-user{background:#F0E9F5;color:#7C5BA6}                /* 用户提供 */
+.b-run{background:#E6F4EC;color:var(--pass-green);border:1px solid var(--pass-green)} /* 已验证 */
+.b-stale{background:#F9E8E8;color:var(--mark-red);border:1px solid var(--mark-red)}   /* 待复核 */
+.b-none{background:#F1F4F9;color:var(--muted)}           /* 未运行验证 */
+.b-red{background:var(--mark-red);color:#fff}
+.b-green{background:var(--pass-green);color:#fff}
+.mono{font-family:var(--mono);font-size:12px}
+.mut{color:var(--muted)}
+/* 证据卡 */
+.ev{border-left:3px solid var(--evidence-amber);background:#FFFDF7;padding:10px 12px;border-radius:0 6px 6px 0;margin-top:10px}
+.ev .t{font-size:12px;color:var(--evidence-amber);font-weight:700;letter-spacing:1px}
+.ev .loc{font-family:var(--mono);font-size:12px;color:var(--ink);margin-top:4px;text-decoration:underline dotted;cursor:pointer}
+.ev .d{font-size:13px;color:#41506B;margin-top:4px;line-height:1.6}
+.not-proved{border:1px dashed var(--mark-red);border-radius:6px;padding:9px 12px;margin-top:10px;font-size:12px;color:var(--mark-red);line-height:1.6}
+.not-proved b{letter-spacing:1px}
+/* 术语 chip */
+.chip{display:inline-block;background:#EEF1F8;color:#3D4FA1;border:1px solid #C9D2F0;border-radius:999px;padding:1px 9px;font-size:12px;cursor:pointer;vertical-align:1px}
+.chip:hover{background:#E2E8FA}
+/* 按钮 */
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.sm{padding:4px 10px;font-size:12px;border-radius:5px}
+.btn:hover{opacity:.88}
+/* ── 首页零基础入口 ─────────────────────────── */
+.entries{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.entry{
+  background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px;
+  cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;
+}
+.entry:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(27,42,74,.10)}
+.entry .q{font-size:15px;font-weight:700}
+.entry .a{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+.entry .go{position:absolute;right:14px;top:14px;color:var(--mark-red);font-family:var(--mono);font-size:12px}
+/* ── 签名元素：流程线 ─────────────────────────── */
+.metro{display:flex;align-items:flex-start;margin:26px 0 10px;position:relative}
+.metro .track{position:absolute;top:23px;left:40px;right:40px;height:4px;background:var(--line);border-radius:2px}
+.metro .track .done{position:absolute;left:0;top:0;height:4px;background:var(--ink);border-radius:2px}
+.station{flex:1;position:relative;z-index:1;text-align:center;cursor:pointer}
+.station .dot{
+  width:46px;height:46px;border-radius:50%;background:#fff;border:4px solid var(--line);
+  display:flex;align-items:center;justify-content:center;margin:0 auto;font-family:var(--mono);font-weight:700;font-size:14px;
+  transition:all .2s;
+}
+.station.cur .dot{border-color:var(--mark-red);background:var(--mark-red);color:#fff;transform:scale(1.12);box-shadow:0 0 0 5px rgba(196,61,61,.15)}
+.station.past .dot{border-color:var(--ink);background:var(--ink);color:#fff}
+.station .lbl{font-size:12px;margin-top:8px;color:var(--muted);line-height:1.4}
+.station.cur .lbl{color:var(--ink);font-weight:700}
+/* 站点详情卡 */
+.station-card{margin-top:18px}
+.s-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.s-actions .btn.on{background:var(--mark-red);border-color:var(--mark-red)}
+.flip{perspective:900px;margin-top:14px}
+.flip-inner{transition:transform .5s;transform-style:preserve-3d;position:relative}
+.flip.flipped .flip-inner{transform:rotateY(180deg)}
+.face{backface-visibility:hidden}
+.face.back{position:absolute;inset:0;transform:rotateY(180deg);display:flex;flex-direction:column;justify-content:center}
+/* ── 知识点页：三档开关 + 十段 ──────────────────── */
+.depth{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+.depth button{border:0;background:transparent;padding:6px 16px;font-size:12px;cursor:pointer;color:var(--muted)}
+.depth button.on{background:var(--ink);color:#fff}
+.sec{border-top:1px dashed var(--grid)}
+.sec .hd{display:flex;align-items:center;gap:8px;padding:11px 18px;cursor:pointer;font-size:13px}
+.sec .hd .no{font-family:var(--mono);font-size:11px;color:var(--evidence-amber);width:30px}
+.sec .hd .arrow{margin-left:auto;color:var(--muted);font-size:11px;transition:transform .2s}
+.sec.open .hd .arrow{transform:rotate(90deg)}
+.sec .bd{display:none;padding:0 18px 16px 66px;font-size:13.5px;line-height:1.9;color:#2E3D5C}
+.sec.open .bd{display:block}
+code{background:#EEF1F6;border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:12px}
+pre.code{background:#0F1B33;color:#D7E1F5;border-radius:8px;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.7;overflow:auto;position:relative}
+pre.code .ln{color:#51648C;display:inline-block;width:26px;user-select:none}
+pre.code .hl{background:rgba(196,61,61,.28);display:inline-block;width:100%}
+/* 寓言卡 */
+.fable{background:linear-gradient(135deg,#FFFDF5,#FBF6E8);border:1px solid #E7D9AE;border-radius:10px;margin:16px 0}
+.fable .hd{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer}
+.fable .hd .tag{font-family:var(--mono);font-size:11px;color:var(--evidence-amber)}
+.fable .hd b{font-size:14px}
+.fable .body{display:none;padding:0 18px 18px;font-size:13.5px;line-height:2}
+.fable.open .body{display:block}
+.fable blockquote{border-left:3px solid #E7D9AE;padding:2px 12px;margin:8px 0;color:#6B5D2E;font-style:normal}
+.fable table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+.fable td,.fable th{border:1px solid #E7D9AE;padding:6px 10px;text-align:left}
+.fable .warn{color:var(--mark-red);font-size:12px;margin-top:6px}
+/* 覆盖六维 */
+.cov{display:flex;flex-direction:column;gap:9px}
+.cov .row{display:grid;grid-template-columns:88px 1fr 92px;align-items:center;gap:10px;font-size:12.5px}
+.bar{height:10px;background:#EDF1F7;border-radius:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:5px}
+.bar i.warn{background:var(--evidence-amber)}
+/* 答辩 */
+.chat{display:flex;flex-direction:column;gap:12px;max-width:900px}
+.msg{max-width:82%;padding:11px 14px;border-radius:10px;font-size:13.5px;line-height:1.8}
+.msg.judge{background:#EEF1F8;border:1px solid #D6DEF2;align-self:flex-start;border-left:4px solid var(--ink)}
+.msg.me{background:var(--ink);color:#fff;align-self:flex-end;border-radius:10px 10px 2px 10px}
+.score2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.score2 .ax{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff}
+.score2 .ax .t{font-size:12px;color:var(--muted)}
+.score2 .ax .v{font-size:20px;font-weight:800;font-family:var(--mono)}
+.score2 .ax .gaps{font-size:12px;color:var(--mark-red);margin-top:4px;line-height:1.6}
+/* 挑战 */
+.ch3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.state3{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.state3 .st{display:flex;justify-content:space-between;border:1px solid var(--grid);border-radius:6px;padding:7px 10px;background:#fff}
+/* 雷达 */
+.radar-wrap{display:flex;gap:30px;align-items:center}
+.legend{font-size:12.5px;line-height:2.1}
+.legend .d{display:flex;justify-content:space-between;width:230px;border-bottom:1px dashed var(--grid)}
+/* 弹层 */
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:50}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:10px;max-width:560px;width:92%;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h3{font-size:15px;display:flex;align-items:center;gap:8px}
+.modal .x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:18px;line-height:1}
+.term-body{font-size:13px;line-height:1.9;margin-top:10px;color:#2E3D5C}
+.term-body .k{color:var(--evidence-amber);font-weight:700}
+.notice{margin-top:14px;border-top:1px dashed var(--grid);padding-top:10px;font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center}
+/* 设置页 */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.field input[type=text],.field input[type=password]{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-size:13px;font-family:var(--mono);background:#fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tog{display:flex;align-items:flex-start;gap:10px;font-size:12.5px;line-height:1.7;padding:10px 12px;border:1px solid var(--grid);border-radius:6px;background:#fff}
+.tog input{margin-top:3px}
+.tog b{display:block;font-size:13px}
+.tog .lv{font-family:var(--mono);font-size:10px;color:var(--evidence-amber);border:1px solid #E7D9AE;border-radius:4px;padding:0 5px;margin-right:4px}
+.xlist{font-family:var(--mono);font-size:12px;line-height:2;color:#41506B}
+.xlist s{color:var(--mark-red);text-decoration-color:rgba(196,61,61,.5)}
+/* 导入与任务书 */
+.mission{display:flex;flex-direction:column;gap:10px}
+.mission label{font-size:12px;color:var(--muted)}
+.mission input,.mission textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-size:13px;font-family:inherit;background:#fff}
+.mission textarea{resize:vertical;min-height:44px}
+.pbar{height:10px;background:#EDF1F7;border-radius:5px;overflow:hidden;margin-top:10px}
+.pbar i{display:block;height:100%;width:0;background:var(--ink);border-radius:5px;transition:width .3s}
+/* diff 对比 */
+.diffbox{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.diffbox .col h5{font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:1px}
+.diffbox pre{font-family:var(--mono);font-size:11.5px;line-height:1.8;border-radius:8px;padding:12px;overflow:auto}
+.diffbox .before pre{background:#F5F0F0;color:#5B4A4A}
+.diffbox .after pre{background:#EEF6F0;color:#2F5240}
+.diffbox .add{background:#CDE8D6;display:inline-block;width:100%}
+/* 双闭环 */
+.dual{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dual .col{border:1px solid var(--grid);border-radius:8px;padding:12px 14px;font-size:12.5px;line-height:2}
+.dual .col h5{font-size:12px;letter-spacing:1px;margin-bottom:6px}
+.dual .pk{font-family:var(--mono);font-size:11px;color:var(--evidence-amber)}
+/* 阶梯提示 */
+.hintstep{border:1px dashed var(--evidence-amber);border-radius:8px;padding:10px 14px;margin-top:10px;font-size:12.5px;line-height:1.8;background:#FFFDF7}
+.hintstep .btn{margin:4px 6px 0 0}
+/* 复述 */
+.recall{border:2px solid var(--ink);border-radius:10px;padding:16px 18px;margin-top:12px;background:#fff}
+.recall textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px;font-size:13px;min-height:64px;margin:8px 0}
+/* 冲刺 */
+.sprint{display:flex;flex-direction:column;gap:7px;font-size:12.5px}
+.sprint .it{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--grid);border-radius:6px;padding:8px 11px;background:#fff}
+.sprint .it .tag{flex-shrink:0;font-family:var(--mono);font-size:10px;color:#fff;background:var(--ink);border-radius:4px;padding:1px 6px;margin-top:2px}
+/* 混淆对比表 */
+.cmp{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}
+.cmp td,.cmp th{border:1px solid var(--grid);padding:6px 10px;text-align:left;vertical-align:top}
+.cmp th{background:#F2F5FA}
+/* 代码库阅读器 */
+.codel{display:grid;grid-template-columns:250px 1fr 290px;gap:14px;align-items:stretch}
+.ctree{font-size:12.5px}
+.ctree .bd{max-height:calc(100vh - 380px);overflow:auto}
+.crow{padding:5px 10px;border-radius:5px;cursor:pointer;display:flex;gap:6px;align-items:center;color:#41506B}
+.crow:hover{background:#F2F5FA}
+.crow.on{background:#EEF1F8;color:var(--ink);font-weight:600}
+.crow .ic{width:14px;text-align:center;flex-shrink:0}
+.cdir{color:var(--muted)}
+.ccode{background:#0F1B33;color:#D7E1F5;border-radius:0 0 10px 10px;overflow:auto;height:calc(100vh - 340px);min-height:420px}
+.ccode .cl{display:flex;font-family:var(--mono);font-size:13px;line-height:1.8;white-space:pre}
+.ccode .cl:hover{background:rgba(255,255,255,.04)}
+.ccode .cl.ev{background:rgba(183,121,31,.22);cursor:pointer;border-left:3px solid var(--evidence-amber)}
+.ccode .cl.cur{background:rgba(196,61,61,.25)}
+.cl.pulse{animation:linepulse 1.1s ease 2}
+@keyframes linepulse{0%,100%{background:rgba(196,61,61,.25)}50%{background:rgba(196,61,61,.6)}}
+.ctoast{position:absolute;top:56px;right:14px;max-width:75%;background:var(--ink);color:#fff;padding:9px 14px;border-radius:8px;font-size:12px;line-height:1.7;display:none;box-shadow:0 8px 24px rgba(15,23,42,.35);z-index:6}
+.ctoast .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--evidence-amber);margin-right:6px;vertical-align:1px}
+.ccode .ln{width:44px;flex-shrink:0;text-align:right;padding-right:10px;color:#51648C;user-select:none}
+.ccode .cl.ev .ln{color:var(--evidence-amber)}
+.codebar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0B1526;color:#B9C6DC;font-size:12px}
+.outl{font-size:12.5px}
+.outl .orow{padding:6px 10px;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;gap:6px}
+.outl .orow:hover{background:#F2F5FA}
+.outl .orow .k{font-family:var(--mono);font-size:10px;color:var(--evidence-amber)}
+/* 调用关系行：窄栏内上下堆叠，路径断行不挤 */
+.cr{padding:7px 8px;border-radius:6px;cursor:pointer;margin:0 -4px}
+.cr:hover{background:#F2F5FA}
+.cr .pth{font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--ink);line-height:1.6}
+.cr .why{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5}
+/* AI 现场 */
+.stage{display:grid;grid-template-columns:26px 1fr 200px 120px;align-items:center;gap:12px;font-size:13px;padding:8px 6px;border-bottom:1px dashed var(--grid)}
+.stage:last-child{border-bottom:0}
+.stage .ic{font-family:var(--mono);text-align:center}
+.stage .ic.done{color:var(--pass-green)} .stage .ic.run{color:var(--evidence-amber)} .stage .ic.q{color:var(--muted)}
+.stage .tok{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
+.stage .bar{height:8px}
+.cursor{display:inline-block;width:8px;height:14px;background:var(--evidence-amber);animation:blink 1s steps(1) infinite;vertical-align:-2px}
+@keyframes blink{50%{opacity:0}}
+/* 全局 AI 助手 */
+.ai-fab{position:fixed;right:26px;bottom:26px;width:54px;height:54px;border-radius:50%;background:var(--ink);color:#fff;border:0;cursor:pointer;font-size:22px;box-shadow:0 8px 24px rgba(27,42,74,.35);z-index:60}
+.ai-fab:hover{transform:scale(1.06)}
+.ai-panel{position:fixed;right:26px;bottom:92px;width:380px;max-height:70vh;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.28);display:none;flex-direction:column;z-index:60;overflow:hidden}
+.ai-panel.on{display:flex}
+.ai-panel .ph{background:var(--ink);color:#fff;padding:11px 16px;font-size:13px;display:flex;align-items:center;gap:8px}
+.ai-panel .pb{padding:14px;display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:52vh}
+.ai-panel .pi{padding:10px 14px;border-top:1px solid var(--grid);display:flex;gap:8px}
+.ai-panel .pi input{flex:1;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12.5px}
+/* 知识图谱 */
+.gwrap{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start}
+.gcanvas-box{position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#gcanvas{display:block;width:100%;height:calc(100vh - 400px);min-height:440px;cursor:grab}
+#gcanvas.dragging{cursor:grabbing}
+.gtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.gtools input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:12.5px}
+.tchip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 11px;font-size:11.5px;cursor:pointer;color:var(--muted)}
+.tchip.on{color:#fff;border-color:transparent}
+.btn.rec{background:var(--mark-red);border-color:var(--mark-red);color:#fff;animation:blink 1s steps(1) infinite}
+.glegend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:10px;align-items:center}
+.glegend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+#gcard .bd{font-size:12.5px;line-height:2}
+#gcard .jump{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="app">
+  <button class="exitfocus" onclick="document.body.classList.remove('focus');document.querySelector('.focusbtn').textContent='⤢ 专注'">⤡ 退出专注</button>
+  <aside class="side">
+    <div class="logo"><b>项目分析学习系统</b><span>DEMO · fixture: todo-clip</span>
+      <button class="focusbtn" onclick="const b=document.body;b.classList.toggle('focus');this.textContent=b.classList.contains('focus')?'⤡ 退出专注':'⤢ 专注'">⤢ 专注</button>
+    </div>
+    <nav id="nav">
+      <a href="#/home" class="on"><span class="no">00</span><span>从这里开始</span></a>
+      <a href="#/import"><span class="no">01</span><span>新建分析与任务书</span></a>
+      <a href="#/scan"><span class="no">02</span><span>Scan 清单</span></a>
+      <a href="#/code"><span class="no">03</span><span>代码库</span></a>
+      <a href="#/overview"><span class="no">04</span><span>项目总览</span></a>
+      <a href="#/map"><span class="no">05</span><span>AI 分析现场</span></a>
+      <a href="#/graph"><span class="no">06</span><span>知识图谱</span></a>
+      <a href="#/flow"><span class="no">07</span><span>业务流程线</span></a>
+      <a href="#/kb"><span class="no">08</span><span>知识库体系</span></a>
+      <a href="#/node"><span class="no">09</span><span>知识点：前端状态</span></a>
+      <a href="#/defend"><span class="no">10</span><span>答辩模拟</span></a>
+      <a href="#/challenge"><span class="no">11</span><span>实战挑战</span></a>
+      <a href="#/radar"><span class="no">12</span><span>能力雷达</span></a>
+      <a href="#/settings"><span class="no">13</span><span>设置与授权</span></a>
+    </nav>
+    <div class="foot">
+      分析版本 <b>scan-v1</b><br>知识库 14 条 · 术语 8 · 今日复习 <b>3</b>
+    </div>
+  </aside>
+  <main class="main">
+
+  <!-- ═══ 00 从这里开始 ═══ -->
+  <section class="screen on" id="s-home">
+    <div class="crumb">HOME / 零基础入口</div>
+    <h1 class="t">你最想弄明白什么？</h1>
+    <p class="sub">不需要先懂任何术语。选一个问题，系统会带你走进真实代码。</p>
+    <div class="entries">
+      <div class="entry" onclick="go('#/flow')">
+        <span class="go">→</span>
+        <div class="q">这个软件整体是怎么运行的？</div>
+        <div class="a">从页面、后端、数据库之间的关系开始认识项目——走一遍「添加任务」的完整旅程。</div>
+      </div>
+      <div class="entry" onclick="go('#/node')">
+        <span class="go">→</span>
+        <div class="q">AI 写的代码，我该怎么看？</div>
+        <div class="a">从一个真实功能出发，逐步认识代码、函数、接口和数据是怎么配合的。</div>
+      </div>
+      <div class="entry" onclick="go('#/defend')">
+        <span class="go">→</span>
+        <div class="q">老师问我代码怎么实现，我该怎么办？</div>
+        <div class="a">进入答辩模拟：一次只问一个问题，答完马上告诉你缺了什么。</div>
+      </div>
+      <div class="entry" onclick="go('#/challenge')">
+        <span class="go">→</span>
+        <div class="q">我怎么知道 AI 有没有把代码写对？</div>
+        <div class="a">学检查实现、看差异、跑验证——最后在隔离环境里亲手改一次。</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:22px">
+      <div class="hd"><span class="file-no">LIB-00</span><b>我的项目</b></div>
+      <table class="bd" style="width:100%;font-size:13px;border-collapse:collapse" border="0">
+        <tr style="color:var(--muted);font-size:11px;text-align:left"><td style="padding:4px 0">名称</td><td>来源</td><td>文件</td><td></td></tr>
+        <tr><td style="padding:7px 0"><b>todo-clip</b> <span class="mut">任务管理示例</span></td><td>本地路径</td><td>6</td><td><button class="btn sm" onclick="go('#/overview')">进入</button></td></tr>
+      </table>
+      <div class="bd" style="border-top:1px dashed var(--grid)">
+        <button class="btn" onclick="go('#/import')">＋ 新建分析</button>
+        <span class="mut" style="font-size:11.5px;margin-left:10px">导入只是开始——先填答辩任务书，系统才知道该帮你准备什么。</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 01 新建分析与任务书 ═══ -->
+  <section class="screen" id="s-import">
+    <div class="crumb">IMPORT / 新建分析 / MISSION 答辩任务书</div>
+    <h1 class="t">新建分析</h1>
+    <p class="sub">导入是只读操作（Auth-L0）。真正决定这个系统好不好用的，是下面那份<b>答辩任务书</b>——讲解、出题、冲刺计划全都以它为锚。</p>
+    <div class="grid2" style="margin-top:18px">
+      <div class="card">
+        <div class="hd"><span class="file-no">IM-01</span><b>项目来源</b><span class="right badge b-src">只读 · 不执行任何项目脚本</span></div>
+        <div class="bd mission">
+          <div class="row2">
+            <div class="field" style="margin:0"><label>项目名称</label><input type="text" value="物流管理系统"></div>
+            <div class="field" style="margin:0"><label>来源方式</label><input type="text" value="本地路径（zip 同样支持，且完全便携）"></div>
+          </div>
+          <label>本地绝对路径</label>
+          <input type="text" value="E:\projects\logistics-system" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-size:13px;font-family:var(--mono)">
+          <div class="mut" style="font-size:11px">realpath 限定授权根目录 · node_modules/.git/dist 自动跳过 · 读失败进跳过清单</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><span class="file-no">IM-02</span><b>答辩任务书 MISSION</b><span class="right badge b-infer">锚定讲解与出题</span></div>
+        <div class="bd mission">
+          <label>① 答辩日期</label>
+          <input type="text" value="2026-11-08（还有 14 天）">
+          <label>② 评委最可能追问什么？</label>
+          <textarea>任务数据到底存没存进数据库；为什么用 Express 而不是直接写死页面；异常分支处理。</textarea>
+          <label>③ 你最怕被问到什么？</label>
+          <textarea>怕让我现场改一个前端功能并解释为什么这么改。</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px" id="importRun">
+      <div class="hd"><span class="file-no">IM-03</span><b>导入执行</b><span class="right mono mut" style="font-size:11px">真实系统：路径校验 → 扫描 → SHA-256 快照 → 栈识别</span></div>
+      <div class="bd">
+        <button class="btn" onclick="importRun()">导入并扫描（模拟）</button>
+        <div class="pbar" id="impBar" style="display:none"><i id="impFill"></i></div>
+        <div class="mut" style="font-size:12px;margin-top:8px" id="impLog">等待开始…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 02 Scan 清单 ═══ -->
+  <section class="screen" id="s-scan">
+    <div class="crumb">SCAN / 初步清单 / 零 LLM 成本 · 秒级</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h1 class="t">Scan 清单：物流管理系统</h1>
+      <span class="badge b-infer">初步清单 · 不代表完整分析</span>
+    </div>
+    <p class="sub">不用等 AI——导入完成即可边看边学。确认大方向没问题，再去「AI 分析现场」启动深度拆解。</p>
+    <div class="grid3" style="margin-top:16px">
+      <div class="card"><div class="hd"><span class="file-no">SC-01</span><b>技术栈（来自 manifest + lockfile）</b></div>
+        <div class="bd" style="font-size:12.5px;line-height:2.1">
+          <span class="badge b-src">express ^4.19.2</span> <span class="badge b-src">react ^18.3</span> <span class="badge b-src">typescript ^5.4</span> <span class="badge b-src">mysql2 ^3.9</span>
+          <div class="mut" style="font-size:11px;margin-top:4px">版本来自 package-lock，不是猜测</div>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><span class="file-no">SC-02</span><b>解析方式（诚实口径）</b></div>
+        <div class="bd state3" style="font-size:12.5px">
+          <div class="st"><span><span class="badge b-src">parsed</span> 结构解析</span><span>312</span></div>
+          <div class="st"><span><span class="badge b-none">text_only</span> 仅文本扫描</span><span>96</span></div>
+          <div class="st"><span><span class="badge b-stale">skipped</span> 跳过（权限/超限）</span><span>2 · 原因可查</span></div>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><span class="file-no">SC-03</span><b>下一步</b></div>
+        <div class="bd">
+          <button class="btn" onclick="go('#/map')">启动 AI 深度分析 →</button>
+          <div class="mut" style="font-size:11px;margin-top:8px">任务后台运行 · 断点续跑 · 预算可控</div>
+        </div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card">
+        <div class="hd"><span class="file-no">SC-04</span><b>API 端点（410 · 前 6）</b></div>
+        <ul class="bd" style="list-style:none;font-size:12.5px;line-height:2.1">
+          <li class="mono"><span class="badge b-src">GET</span> /api/tasks　<span class="mut">src/server/index.ts:12</span></li>
+          <li class="mono"><span class="badge b-src">POST</span> /api/tasks　<span class="mut">src/server/index.ts:17</span></li>
+          <li class="mono"><span class="badge b-src">PATCH</span> /api/tasks/:id　<span class="mut">src/server/index.ts:24</span></li>
+          <li class="mono"><span class="badge b-src">POST</span> /api/transfer/accept　<span class="mut">src/modules/transfer/controller.ts:31</span></li>
+          <li class="mono"><span class="badge b-src">GET</span> /api/orders?status=　<span class="mut">src/modules/order/controller.ts:8</span></li>
+          <li class="mono"><span class="badge b-stale">GET</span> /api/reports/summary　<span class="mut">识别失败 · 已入跳过清单</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="hd"><span class="file-no">SC-05</span><b>前端路由（38 · 前 5）</b></div>
+        <ul class="bd" style="list-style:none;font-size:12.5px;line-height:2.1">
+          <li class="mono">/login　<span class="mut">src/pages/Login.tsx · next-app 约定</span></li>
+          <li class="mono">/tasks　<span class="mut">src/pages/tasks/page.tsx</span></li>
+          <li class="mono">/orders/:id　<span class="mut">src/pages/orders/[id]/page.tsx</span></li>
+          <li class="mono">/transfer/accept　<span class="mut">src/pages/transfer/accept.tsx</span></li>
+          <li class="mono">/reports　<span class="mut">src/pages/reports/page.tsx</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 03 代码库阅读器 ═══ -->
+  <section class="screen" id="s-code">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h1 class="t">代码库</h1>
+      <span class="badge b-src">只读</span>
+      <span class="mut" style="font-size:12px">修改只发生在挑战隔离区（Auth-L5）——这里负责"看懂"和"定位"。</span>
+    </div>
+    <p class="sub">证据行有<b style="color:var(--evidence-amber)">琥珀色标记</b>（点击看证据）；符号大纲点击跳行；选中符号即显示「谁调用它 / 它调用谁」——答辩被问"这段代码谁在用"，一秒回答。</p>
+    <div class="codel" style="margin-top:16px">
+      <div class="card ctree" id="codeTree"></div>
+      <div class="card" style="overflow:hidden;position:relative">
+        <div class="ctoast" id="cToast"></div>
+        <div class="codebar"><span class="mono" id="codePath">src/web/TasksPage.tsx</span><span class="mono" id="codeAt" style="color:var(--evidence-amber)"></span>
+          <span class="badge b-infer" style="margin-left:auto">只读</span>
+          <button class="btn sm ghost" style="color:#B9C6DC;border-color:#31446B" onclick="alert('demo：进入挑战隔离 worktree 修改（需 Auth-L5 单次确认）')">在挑战中修改</button>
+        </div>
+        <div class="ccode" id="codeArea"></div>
+      </div>
+      <div class="ccol" style="display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 340px);overflow:auto">
+        <div class="card"><div class="hd"><span class="file-no">SYM</span><b>符号大纲</b></div><div class="bd outl" id="codeOutline"></div></div>
+        <div class="card"><div class="hd"><span class="file-no">USE</span><b>调用关系</b></div><div class="bd outl" id="codeCalls" style="font-size:12.5px;line-height:1.9;color:#41506B">点击符号查看</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 01 项目总览 ═══ -->
+  <section class="screen" id="s-overview">
+    <div class="crumb">PROJECT / todo-clip / 总览</div>
+    <h1 class="t">todo-clip <span class="mut" style="font-size:13px">· 任务管理示例（Express + React）</span></h1>
+    <p class="sub">分析版本 scan-v1 · 本页所有结论都挂着证据，点即可跳源码。</p>
+
+    <div class="grid3" style="margin-top:18px">
+      <div class="card"><div class="hd"><span class="file-no">OV-01</span><b>技术栈</b></div>
+        <div class="bd" style="font-size:13px;line-height:2">
+          <span class="badge b-src">express ^4.19</span> <span class="badge b-src">react</span>
+          <span class="badge b-src">typescript</span> <span class="badge b-infer">版本取自 package-lock</span>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><span class="file-no">OV-02</span><b>模块</b></div>
+        <div class="bd" style="font-size:13px;line-height:2">
+          <code>src/server</code> 接口层 · <code>src/web</code> 页面层 · <code>src/db</code> 数据层
+          <div class="mut" style="font-size:11.5px;margin-top:4px">三层一条链：页面 → 接口 → 数据表</div>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><span class="file-no">OV-03</span><b>分析状态（三个独立状态）</b></div>
+        <div class="bd state3">
+          <div class="st"><span>分析任务完成</span><span class="badge b-green">是</span></div>
+          <div class="st"><span>覆盖充分</span><span class="badge b-infer">部分（运行验证未做）</span></div>
+          <div class="st"><span>结论已验证</span><span class="badge b-none">2/9 条</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card">
+        <div class="hd"><span class="file-no">OV-04</span><b>六维覆盖报告</b><span class="right badge b-infer">诚实口径：选料不改变覆盖</span></div>
+        <div class="bd cov">
+          <div class="row"><span>文件解析</span><div class="bar"><i style="width:100%"></i></div><span class="mut">6 / 6</span></div>
+          <div class="row"><span>符号识别</span><div class="bar"><i style="width:100%"></i></div><span class="mut">9 / 9</span></div>
+          <div class="row"><span>引用关系</span><div class="bar"><i style="width:83%"></i></div><span class="mut">5 / 6 · 1 跳过</span></div>
+          <div class="row"><span>业务流程</span><div class="bar"><i style="width:50%"></i></div><span class="mut">1 / 2 条</span></div>
+          <div class="row"><span>外部依赖</span><div class="bar"><i style="width:100%"></i></div><span class="mut">1 / 1</span></div>
+          <div class="row"><span>运行验证</span><div class="bar"><i class="warn" style="width:0%"></i></div><span class="mut">0 · 未授权运行</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><span class="file-no">OV-05</span><b>评委视角体检（均标「疑似」，非定论）</b></div>
+        <div class="bd" style="font-size:13px;line-height:2">
+          <div>· <code>TasksPage.tsx:17</code> 空 catch —— 追问点：网络失败会怎样？</div>
+          <div>· <code>TasksPage.tsx:18</code> console.log 残留</div>
+          <div>· <code>index.ts:12</code> POST 后无持久层调用 —— <b style="color:var(--mark-red)">数据真的落库了吗？</b></div>
+          <div class="notice">这些是「最可能被追问的点」，已注入答辩题库。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">OV-06</span><b>开放问题</b></div>
+      <div class="bd" style="font-size:13px">
+        <div>❓ <b>POST /api/tasks 没有写数据库，任务存在哪？</b><span class="mut">（下一步核查：查 server/index.ts 是否有中间件写文件/内存）</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 02 AI 分析现场 ═══ -->
+  <section class="screen" id="s-map">
+    <div class="crumb">MAP / AI 分析现场 / worker 子进程 · 断点续跑 · prompt 缓存</div>
+    <h1 class="t">AI 正在拆解你的项目</h1>
+    <p class="sub">这个系统的每一条结论、每一张寓言卡、每一道考题都是大模型在你授权的范围内干出来的活——这里把它的作业过程完全摊开。</p>
+
+    <div class="grid3" style="margin-top:18px">
+      <div class="card"><div class="hd"><span class="file-no">AI-01</span><b>模型与预算</b></div>
+        <div class="bd" style="font-size:12.5px;line-height:2">
+          <span class="badge b-ai">glm-4-flash</span> 温度 0.2 · Auth-L1a/L1b 已授权<br>
+          token 预算 <b>120K</b> · 已用 <b style="color:var(--evidence-amber)">46K（38%）</b><br>
+          缓存命中 <b style="color:var(--pass-green)">41%</b>（重跑同阶段不再花钱）
+        </div>
+      </div>
+      <div class="card"><div class="hd"><span class="file-no">AI-02</span><b>本阶段喂给模型的上下文</b></div>
+        <div class="bd" style="font-size:12.5px;line-height:2">
+          出站过滤器已执行：<span style="color:var(--pass-green)">敏感文件 0</span> · 遮蔽 <span style="color:var(--pass-green)">0</span> 处<br>
+          <span class="mono">TasksPage.tsx / server/index.ts / schema.sql</span><br>
+          <span class="mut">内容包定界符标记 data-only，模型无法借它下指令</span>
+        </div>
+      </div>
+      <div class="card"><div class="hd"><span class="file-no">AI-03</span><b>双重校验闸门</b></div>
+        <div class="bd" style="font-size:12.5px;line-height:2">
+          已拦截 1 条过度推断：<br>
+          <span style="color:var(--mark-red)">"任务会保存到数据库" → 证据不足，转开放问题</span><br>
+          <span class="mut">AI 不许用流畅的猜测填补事实缺口</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">AI-04</span><b>Map 十阶段流水线</b><span class="right mono mut" style="font-size:11px">阶段产物即时落盘 · 中断从 file:<span id="mapCk">4</span>/6 续跑</span></div>
+      <div class="bd" id="stageList" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">AI-05</span><b>正在生成：知识点「前端状态 useState」</b><span class="right badge b-ai">流式输出 · zod 校验</span></div>
+      <div class="bd">
+        <pre class="code" id="typeBox" style="min-height:132px"></pre>
+        <div class="notice" style="border:0;padding-top:8px">
+          <span>产出要求：十段结构 + file:line 证据 + 置信度 + 前置术语清单 → 结构化写入知识库</span>
+          <span class="badge b-run" style="margin-left:auto">zod 校验通过</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 03 知识图谱（2D/3D 力导向双视图） ═══ -->
+  <section class="screen" id="s-graph">
+    <div class="crumb">GRAPH / 知识图谱 / 八类全量 · 单击侧卡 · 双击直达 · 2D/3D 双视图</div>
+    <h1 class="t">知识图谱</h1>
+    <p class="sub">整个项目一眼看完：大小 = 重要度（PageRank），颜色 = 节点类型，外环 = 掌握状态。单击看详情，双击直达内容，拖拽旋转（3D）/ 滚轮缩放。</p>
+    <div class="gtools" style="margin-top:14px">
+      <div class="depth"><button class="on" id="m2d" onclick="gsetMode('2d')">2D 力导向</button><button id="m3d" onclick="gsetMode('3d')">3D 力导向</button></div>
+      <input id="gsearch" placeholder="搜索节点：输入 loading / 中间件 / tasks…" oninput="gdraw()">
+      <span class="tchip" id="spinChip" onclick="gToggleSpin()">⟳ 自动旋转：关</span>
+      <span class="mut" style="font-size:11px" id="gcount"></span>
+    </div>
+    <div class="gtools" id="gfilters" style="margin-top:0"></div>
+    <div class="gwrap">
+      <div class="gcanvas-box"><canvas id="gcanvas" width="980" height="560"></canvas></div>
+      <div id="gcard"></div>
+    </div>
+    <div class="glegend" id="glegend"></div>
+  </section>
+
+  <!-- ═══ 04 业务流程线（签名元素） ═══ -->
+  <section class="screen" id="s-flow">
+    <div class="crumb">FLOW / 添加任务 / 交互式应用模板</div>
+    <h1 class="t">业务流程线：添加一次任务</h1>
+    <p class="sub">点击按钮之后发生了什么？沿着这条线走。<b style="color:var(--mark-red)">每一站都能：看懂 · 看代码 · 追下去 · 考考我。</b></p>
+
+    <div class="metro">
+      <div class="track"><div class="done" id="trackDone"></div></div>
+      <div class="station" data-i="0"><div class="dot">①</div><div class="lbl">用户操作<br>点击「添加任务」</div></div>
+      <div class="station" data-i="1"><div class="dot">②</div><div class="lbl">前端处理<br>handleSubmit 发请求</div></div>
+      <div class="station" data-i="2"><div class="dot">③</div><div class="lbl">接口与后端<br>POST /api/tasks</div></div>
+      <div class="station" data-i="3"><div class="dot">④</div><div class="lbl">数据变化<br>tasks 表（待核实）</div></div>
+      <div class="station" data-i="4"><div class="dot">⑤</div><div class="lbl">结果返回<br>201 + 新任务</div></div>
+    </div>
+
+    <div class="card station-card" id="stationCard">
+      <div class="hd">
+        <span class="file-no" id="stNo">STEP ①</span><b id="stTitle">用户操作：点击「添加任务」</b>
+        <span class="right" id="stBadges"><span class="badge b-src">源码事实</span></span>
+      </div>
+      <div class="bd">
+        <div id="stBody"></div>
+        <div class="s-actions">
+          <button class="btn sm on" id="a0" onclick="stAction(0)">看懂</button>
+          <button class="btn sm ghost" id="a1" onclick="stAction(1)">看代码</button>
+          <button class="btn sm ghost" id="a2" onclick="stAction(2)">追下去</button>
+          <button class="btn sm ghost" id="a3" onclick="stAction(3)">考考我</button>
+        </div>
+        <div class="flip" id="flipBox"><div class="flip-inner"><div class="face" id="stFace"></div></div></div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:14px">↩ 反向追踪也可用：在总览点「tasks 表（待核实）」可以从状态写入点反查触发条件。</p>
+  </section>
+
+  <!-- ═══ 03 知识库体系 ═══ -->
+  <section class="screen" id="s-kb">
+    <div class="crumb">KNOWLEDGE BASE / 知识库体系 / 骨架来自本项目真实技术栈</div>
+    <h1 class="t">知识库</h1>
+    <p class="sub">你学到的一切都沉淀在这里，按<b>本项目实际用到的技术</b>分域归档——每个知识点都挂着它在本项目里的真实用法，过了不会没，到期自动回来。</p>
+
+    <div class="grid3" style="margin-top:16px">
+      <div class="card"><div class="bd" style="text-align:center"><div style="font-size:24px;font-weight:800">14</div><div class="mut" style="font-size:11px">知识点 · 全部来自本项目代码</div></div></div>
+      <div class="card"><div class="bd" style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--pass-green)">5</div><div class="mut" style="font-size:11px">已验证掌握（有独立练习证据）</div></div></div>
+      <div class="card"><div class="bd" style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--evidence-amber)">3</div><div class="mut" style="font-size:11px">今日到期复习（FSRS 调度）</div></div></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">KB-R1</span><b>今日复习队列</b><span class="right badge b-infer">先回忆，再翻面，最后才看答案</span></div>
+      <div class="bd" id="reviewQueue" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-top:20px">
+      <div class="depth" id="kbView">
+        <button class="on" onclick="kbSetView(0)">按技术域</button>
+        <button onclick="kbSetView(1)">按五类学习对象</button>
+      </div>
+      <span class="mut" style="font-size:11.5px">域不是通用教程分类——来自栈识别：package.json → typescript / react / express + schema.sql → sql</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:230px 1fr;gap:16px;margin-top:14px" id="kbBody">
+      <div class="card" style="align-self:start" id="kbDomains"></div>
+      <div class="card" id="kbItems"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">KB-T1</span><b>术语表</b><span class="right mut" style="font-size:11px">已理解才收录 · 含 Avoid 别名裁决</span></div>
+      <div class="bd" style="display:flex;flex-wrap:wrap;gap:8px">
+        <span class="chip" onclick="termPop(event)">变量</span>
+        <span class="chip" onclick="termPop(event)">函数</span>
+        <span class="chip" onclick="termPop(event)">中间件</span>
+        <span class="chip" onclick="termPop(event)">状态</span>
+        <span class="chip" onclick="termPop(event)">路由</span>
+        <span class="chip" onclick="termPop(event)">Promise</span>
+        <span class="chip" onclick="termPop(event)">props</span>
+        <span class="chip" onclick="termPop(event)">事务</span>
+        <span class="mut" style="font-size:11.5px;align-self:center">…共 8 条（其余待你学懂后收录）</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 04 知识点页 ═══ -->
+  <section class="screen" id="s-node">
+    <div class="crumb">NODE / 前端状态 useState / kind: 核心概念</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <h1 class="t">前端状态是什么？</h1>
+      <div class="depth" id="depth">
+        <button onclick="setDepth(0)" class="on">从零开始</button>
+        <button onclick="setDepth(1)">结合项目学习</button>
+        <button onclick="setDepth(2)">深入原理</button>
+      </div>
+    </div>
+    <p class="sub">同一条证据链，三种讲法。切换深度不会互相矛盾——它们来自同一份核验事实。</p>
+
+    <div class="fable" id="fable">
+      <div class="hd" onclick="document.getElementById('fable').classList.toggle('open')">
+        <span class="tag">FABLE</span><b>寓言卡：会记住事情的便利贴</b>
+        <span class="right" style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <span class="badge b-ai">AI 生成 · ≈0.8K tok</span>
+          <button class="btn sm ghost" onclick="event.stopPropagation();alert('按固定四段重新生成寓言卡 ≈0.8K tok')">↻</button>
+          <span class="mut" style="font-size:11px">点开阅读 · 结尾才揭晓</span>
+        </span>
+      </div>
+      <div class="body">
+        <blockquote>办公室里有一块白板，大家都往上写要办的事。可是白板谁都能擦，写上去的话一阵风就没了一半。后来小李在工位上贴了一张<b>便利贴</b>，写上「下午三点交表」。别人看不见这张纸，但小李每次抬头都能看到。下午两点，风把白板吹干净了，全办公室的人都忘了交表——只有小李抬起头，看到了便利贴，起身交了表。</blockquote>
+        <div style="margin-top:8px"><b>故事讲的是什么？（先自己猜再看）</b></div>
+        <table>
+          <tr><th>故事里的东西</th><th>对应的技术</th></tr>
+          <tr><td>人人可见、谁都能擦的白板</td><td>数据库 / 后端数据</td></tr>
+          <tr><td>贴在工位上、只有小李看得见的便利贴</td><td><b>前端状态（useState）</b></td></tr>
+          <tr><td>「下午三点交表」这行字</td><td>状态里存的值（title、loading）</td></tr>
+          <tr><td>风吹白板</td><td>页面刷新会丢掉状态</td></tr>
+        </table>
+        <div class="warn">⚠ 类比在哪些地方不成立：真实状态变化会触发页面重新渲染（便利贴不会自己变字）；状态也可以跨组件共享（便利贴只属于一个人）。别把类比当事实。</div>
+        <div class="notice" style="border:0">回到项目：这张「便利贴」就贴在 <span class="loc mono" onclick="evModal(0)">TasksPage.tsx:5-6</span> —— title 和 loading 两张便利贴。</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:4px">
+      <div class="hd"><span class="file-no">NODE-E1</span><b>先看结论（带证据）</b>
+        <span class="right"><span class="badge b-src">源码事实</span><span class="badge b-none">未运行验证</span></span>
+      </div>
+      <div class="bd" style="font-size:13.5px;line-height:1.9">
+        点击「添加任务」按钮时，页面上的输入框内容存在<b>前端状态</b>里；请求发出前后，<code>loading</code> 状态控制按钮是否可点。
+        <div class="ev">
+          <div class="t">证据 · 已关联 · 当前版本一致</div>
+          <div class="loc" onclick="evModal(0)">src/web/TasksPage.tsx:5-9</div>
+          <div class="d">第 5-6 行定义了两个状态；第 9 行请求发出前置为 true，第 23 行结束后置回 false。</div>
+        </div>
+        <div class="not-proved"><b>尚未证明：</b>请求失败时 loading 一定会恢复吗？——证据显示 finally 分支会恢复，但真实运行行为未验证（运行验证未授权）。</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px" id="secBox">
+      <div class="hd"><span class="file-no">NODE-E2</span><b>十段讲解（按你的节奏展开）</b>
+        <span class="right"><span class="badge b-ai">AI 组织讲解 · 基于同一份核验证据</span><button class="btn sm ghost" onclick="alert('重新生成本页讲解 ≈1.2K tok（已缓存版本将作废）')">↻ 重新生成</button></span>
+      </div>
+      <div class="bd" style="padding:6px 0 10px" id="secs"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">NODE-E3</span><b>沉淀进知识库</b>
+        <span class="right"><span class="badge b-infer">练习中</span><span class="badge b-none">下次复习：明天</span></span>
+      </div>
+      <div class="bd" style="font-size:12.5px;line-height:2">
+        本知识点已归入知识库「<b>React 前端</b>」域 · 它是业务流程线<a href="#/flow" style="color:#3D4FA1;text-decoration:underline">第②站</a>的前置知识 · 易混淆：<span class="chip" onclick="termPop(event)">状态</span> vs <span class="chip" onclick="termPop(event)">props</span><br>
+        <span class="mut">学习历史：10-25 通过「找代码」练习（证据：独立定位到 TasksPage.tsx:5，未用提示）</span>
+        <button class="btn sm ghost" style="float:right" onclick="go('#/kb')">进入知识库 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 04 答辩模拟 ═══ -->
+  <section class="screen" id="s-defend">
+    <div class="crumb">DEFEND / 答辩模拟 / 模式：功能实现原理</div>
+    <h1 class="t" id="dTitle">模拟答辩</h1>
+    <p class="sub">一次只问一个问题。回答后会看到两轴评分——它们独立打分，不合并成总分。<span class="badge b-ai">全程由评委 AI 驱动：出题、判定缺口、组织追问，都必须引用项目证据</span></p>
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;margin-top:18px">
+      <div>
+        <div class="chat" id="dchat"></div>
+        <div id="dctl"></div>
+      </div>
+      <div id="dside"></div>
+    </div>
+  </section>
+
+  <!-- ═══ 05 实战挑战 ═══ -->
+  <section class="screen" id="s-challenge">
+    <div class="crumb">CHALLENGE / 隔离工作区：git worktree（非沙箱）/ 授权 Auth-L5 已开启</div>
+    <h1 class="t">实战挑战</h1>
+    <p class="sub">先定位、再动手、必须验证。三种结果分开展示——改了不等于验证了，验证了不等于验收了。</p>
+
+    <div class="grid3" style="margin-top:18px">
+      <div class="card">
+        <div class="hd"><span class="file-no">CH-01</span><b>定位题</b><span class="right badge b-green">已通过</span></div>
+        <div class="bd" style="font-size:12.5px;line-height:1.9">
+          「添加任务」的请求函数在哪？<br>
+          你的答案：<span class="mono">TasksPage.tsx:8</span><br>
+          校验：<span style="color:var(--pass-green)">命中（整库引用图核对）</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><span class="file-no">CH-02</span><b>改码题：防重复提交</b><span class="right badge b-run">验收满足</span></div>
+        <div class="bd state3" style="font-size:12.5px">
+          <div class="st"><span>代码已修改</span><span style="color:var(--pass-green)">✓ +3 行</span></div>
+          <div class="st"><span>验证命令已执行</span><span style="color:var(--pass-green)">✓ tsc 通过</span></div>
+          <div class="st"><span>验收条件满足</span><span style="color:var(--pass-green)">✓ 连点仅发一次</span></div>
+          <div class="mut" style="margin-top:4px">worktree: .worktrees/ch-02 · 可一键回滚</div>
+          <button class="btn sm ghost" style="margin-top:8px" onclick="diffModal()">查看变更 diff</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><span class="file-no">CH-03</span><b>破坏实验</b><span class="right badge b-infer">已还原</span></div>
+        <div class="bd" style="font-size:12.5px;line-height:1.9">
+          删掉 <code>loading</code> 拦截再连点按钮 → 实际发出 <b style="color:var(--mark-red)">3 次</b>请求。<br>
+          <span class="mut">现在你能回答：为什么需要那两行状态代码？</span><br>
+          <button class="btn sm ghost" style="margin-top:6px" onclick="alert('已还原到基线（demo 演示）')">一键还原</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">CH-04</span><b>验证闭环六查（改码题 CH-02）</b></div>
+      <div class="bd" style="font-size:12.5px;line-height:2">
+        ✓ 定位正确（先定位后动手，+过程分）　✓ 满足需求　✓ 无副作用（未触碰 server 层）<br>
+        ✓ 测试已跑：tsc 通过<span class="mut">（项目无测试框架 → 类型检查作为本项验证，断言范围仅类型层）</span>
+        <span class="badge b-infer" style="margin-left:6px">行为层未验证</span><br>
+        ✓ 能解释修改原因　✓ 先定位再动手
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">CH-05</span><b>AI 协作实践：同一个任务，学两种能力</b>
+        <span class="right"><span class="depth"><button class="on" id="pk0" onclick="pkSet(0)">完整脚本</button><button id="pk1" onclick="pkSet(1)">提示要点</button><button id="pk2" onclick="pkSet(2)">自己组织</button></span></span>
+      </div>
+      <div class="bd">
+        <div class="dual">
+          <div class="col" style="border-left:4px solid var(--ink)">
+            <h5>项目能力 · 我需要理解什么</h5>
+            · 「添加任务」的请求函数在哪？<span class="mut">（TasksPage.tsx:8）</span><br>
+            · 加载状态由谁控制？<span class="mut">（useState 第 6 行）</span><br>
+            · 请求成功和失败分别发生什么？<span class="mut">（then / 空 catch）</span><br>
+            · 怎么避免重复提交？<span class="mut">（loading 拦截点击）</span>
+          </div>
+          <div class="col" id="pkAi" style="border-left:4px solid var(--evidence-amber)">
+            <h5>AI 使用能力 · 我该怎样让 AI 帮我</h5>
+            <span id="pkBody"></span>
+          </div>
+        </div>
+        <div class="notice" style="border:0">随能力增长，脚手架逐级撤除——最终你能自己提出任务、定验收条件、选验证方式。这才是可迁移的方法，而不是背提示词。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 06 能力雷达 ═══ -->
+  <section class="screen" id="s-radar">
+    <div class="crumb">RADAR / 能力雷达 / 掌握判定与复习调度分离</div>
+    <h1 class="t">能力雷达</h1>
+    <p class="sub">没有单一分数。每一维都记录判断依据：最近一次独立回答、是否用了提示、是否找对代码、是否通过验证。</p>
+    <div class="radar-wrap card" style="margin-top:18px;padding:24px">
+      <svg width="300" height="280" viewBox="0 0 300 280">
+        <g stroke="#DCE4F0" fill="none">
+          <polygon points="150,30 262,102 219,232 81,232 38,102"/>
+          <polygon points="150,70 224,119 195,204 105,204 76,119"/>
+          <polygon points="150,110 187,135 172,177 128,177 113,135"/>
+        </g>
+        <polygon points="150,44 236,114 175,208 81,232 38,102" fill="rgba(27,42,74,.14)" stroke="#1B2A4A" stroke-width="2"/>
+        <g font-size="11" fill="#5B6B85" text-anchor="middle">
+          <text x="150" y="20">概念解释 72</text>
+          <text x="272" y="100">代码定位 55</text>
+          <text x="230" y="252">流程追踪 80</text>
+          <text x="70" y="252">设计边界 40</text>
+          <text x="22" y="100">修改验证 35</text>
+          <text x="150" y="262">AI 协作 60</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <div class="d"><span>概念解释</span><span class="badge b-run">已验证掌握 · 3 项证据</span></div>
+        <div class="d"><span>流程追踪</span><span class="badge b-run">已验证掌握 · 2 项证据</span></div>
+        <div class="d"><span>AI 协作与判断</span><span class="badge b-infer">练习中</span></div>
+        <div class="d"><span>代码定位</span><span class="badge b-infer">练习中 · 需提示</span></div>
+        <div class="d"><span>设计边界</span><span class="badge b-stale">练习中（项目变更需重验）</span></div>
+        <div class="d"><span>修改与验证</span><span class="badge b-none">未学习</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">RD-01</span><b>下一个该学什么（最近发展区）</b></div>
+      <div class="bd" style="font-size:13px;line-height:2">
+        建议 → <b>修改与验证：给「添加任务」加 loading 态</b>（对应你的答辩任务书第 2 条；前置「前端状态」已验证掌握，刚好够得着）
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd"><span class="file-no">RD-02</span><b>答辩冲刺 · 距 2026-11-08 还有 14 天</b>
+        <span class="right"><button class="btn sm ghost" onclick="alert('demo：拖动卡片排序、勾掉不想学的项——计划永远可调，不为低优先级知识点制造焦虑')">调整计划</button></span>
+      </div>
+      <div class="bd sprint">
+        <div class="it"><span class="tag">今日必学</span><span>「任务到底存哪了」开放问题 → 转正式知识点（来自总览 OV-06）</span></div>
+        <div class="it"><span class="tag">到期机制</span><span>异步与 loading——复习队列 3 张卡今日到期</span></div>
+        <div class="it"><span class="tag">高频追问</span><span>空 catch 的后果（体检疑似项，评委大概率抓，先自问一遍）</span></div>
+        <div class="it"><span class="tag">必练改码</span><span>防重复提交（挑战 CH-02，验收条件已就绪，隔离 worktree）</span></div>
+        <div class="it"><span class="tag">明日</span><span>模拟答辩第 2 轮 · 全题型含"不看答案复述"</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 08 设置与授权 ═══ -->
+  <section class="screen" id="s-settings">
+    <div class="crumb">SETTINGS / 模型服务 · 授权 · 安全 · 便携</div>
+    <h1 class="t">设置与授权</h1>
+    <p class="sub">密钥只写不读：页面上永远只显示掩码。每一类敏感操作独立授权——允许过 A 不代表允许 B。</p>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="card">
+        <div class="hd"><span class="file-no">ST-01</span><b>模型服务</b><span class="right"><span class="badge b-infer">OpenAI 兼容</span></span></div>
+        <div class="bd">
+          <div class="field"><label>服务商预设（免费额度优先，付费 API 保底——选一个自动填好）</label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px" id="presetRow"></div>
+            <div class="mut" style="font-size:10.5px;margin-top:6px">仅接入官方开放接口；客户端签到积分走私有协议，不做逆向适配</div>
+          </div>
+          <div class="row2">
+            <div class="field"><label>baseURL</label><input type="text" id="stBase" value="https://open.bigmodel.cn/api/paas/v4"></div>
+            <div class="field"><label>模型</label><input type="text" id="stModel" value="glm-4-flash"></div>
+          </div>
+          <div class="field"><label>API Key　<span style="color:var(--pass-green)">已保存：zk-8****3f2a（仅掩码，不可回读）</span></label>
+            <input type="password" placeholder="输入新 Key 以更新；留空保持不变"></div>
+          <div class="row2">
+            <div class="field"><label>温度（0 = 严谨，1 = 发散）</label><input type="text" value="0.2"></div>
+            <div class="field"><label>单次发送上下文上限</label><input type="text" value="60,000 字符"></div>
+          </div>
+          <label class="tog"><input type="checkbox" id="stLocal"><span><b><span class="lv">L1b</span>允许本地/内网模型服务</b>Ollama 等本地服务需要勾选；SSRF 防护对其放行</span></label>
+          <button class="btn" onclick="this.textContent='连通成功 ✓（延迟 380ms）';this.style.background='var(--pass-green)';this.style.borderColor='var(--pass-green)'">测试连通</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><span class="file-no">ST-02</span><b>分层授权（Auth-L0~L6）</b><span class="right badge b-infer">逐项独立，互不继承</span></div>
+        <div class="bd" style="display:flex;flex-direction:column;gap:9px">
+          <label class="tog"><input type="checkbox" checked disabled><span><b><span class="lv">L0</span>只读扫描与静态分析</b>导入项目即授权其根目录，越界读取一律拒绝</span></label>
+          <label class="tog"><input type="checkbox" checked><span><b><span class="lv">L1a</span>使用模型服务</b>发起 LLM 请求（首次使用时确认）</span></label>
+          <label class="tog"><input type="checkbox" checked><span><b><span class="lv">L1b</span>发送项目内容</b>每次发送前列出文件清单与字符量；变更范围需再确认</span></label>
+          <label class="tog"><input type="checkbox"><span><b><span class="lv">L2</span>执行构建 / 测试命令</b>命令先经副作用审查；默认关闭</span></label>
+          <label class="tog"><input type="checkbox" disabled><span><b><span class="lv">L5</span>修改项目文件（实战挑战）</b>项目级开关默认关 + 单次确认；在隔离 worktree 进行</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:16px">
+      <div class="card">
+        <div class="hd"><span class="file-no">ST-03</span><b>出站过滤器（发送给模型之前，强制执行）</b></div>
+        <div class="bd">
+          <div class="xlist">
+            默认排除：<s>.env*</s>　<s>*.pem / *.key / *.p12</s>　<s>id_rsa*</s>　<s>credentials*</s>　<s>secrets/</s><br>
+            内容级密钥检测：<span style="color:var(--pass-green)">sk-… / AKIA… / ghp_… / JWT / 私钥块</span> → 命中即遮蔽为 <code>[REDACTED]</code><br>
+            目标校验：DNS 解析后拒绝私网/环回地址；重定向逐跳重校验
+          </div>
+          <div class="notice" style="border:0">上次调用记录：发送 6 文件 / 18,204 字符 · 遮蔽 0 处 · 目标 registry 合规</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="hd"><span class="file-no">ST-04</span><b>便携模式</b><span class="right badge b-run">最终目标 · 已按此设计</span></div>
+        <div class="bd" style="font-size:12.5px;line-height:2">
+          数据目录：<code>./data</code>（相对应用根）——数据库、工作区、备份、导出全在这里<br>
+          <span style="color:var(--pass-green)">✓</span> 随目录拷贝即可迁移，不依赖注册表与安装路径<br>
+          <span style="color:var(--pass-green)">✓</span> zip 导入的项目完全便携；路径导入的项目绑定本机（UI 已标注）<br>
+          <span style="color:var(--pass-green)">✓</span> 本页界面不加载任何网络字体/CDN 资源
+        </div>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<!-- 全局 AI 助手（绑定项目证据） -->
+<button class="ai-fab" onclick="document.getElementById('aiPanel').classList.toggle('on')" title="学习助手">🤖</button>
+<div class="ai-panel" id="aiPanel">
+  <div class="ph">🤖 学习助手 · <span style="opacity:.7;font-size:11px">轻量混合检索：词法+图谱邻域（语义索引可选）· 只依据已存证据，不足就明说</span></div>
+  <div class="pb">
+    <div class="msg me" style="max-width:100%">如果接口请求失败，页面会变成什么样？</div>
+    <div class="msg judge" style="max-width:100%;border-left-color:var(--evidence-amber)">
+      依据现有证据回答：<b>界面上不会有任何提示</b>——<code>TasksPage.tsx:17</code> 的 catch 目前是空的，异常被吞掉；console 也不会有报错。这是体检标记的疑似追问点。<br><br>
+      <b style="color:var(--evidence-amber)">证据缺口：</b>真实运行时是否会有浏览器默认报错行为——属于运行观察（E4），尚未授权验证。下一步核查：授权 L2 后跑一次断网测试。
+    </div>
+    <div class="msg me" style="max-width:100%;opacity:.55">帮我出 3 道「添加任务」的答辩追问</div>
+    <div class="msg judge" style="max-width:100%;border-left-color:var(--evidence-amber)">
+      已生成并挂到流程线第②④站（每道都绑定 file:line 证据）：<br>1. 连点三次按钮为什么只发一次请求？<br>2. 建了 tasks 表就能证明接口会写库吗？<br>3. 空 catch 在什么场景下会掩盖事故？
+    </div>
+  </div>
+  <div class="pi"><input placeholder="问任何关于这个项目的问题…"><button class="btn sm">发送</button></div>
+</div>
+
+<!-- 证据弹层 -->
+<div class="mask" id="mask" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3><span class="file-no" id="mNo">EVIDENCE</span><span id="mTitle">证据卡</span><span class="x" onclick="closeModal()">✕</span></h3>
+    <div id="mBody"></div>
+    <div class="notice"><span>🔗 在真实应用中点击行号会打开源码阅读器并高亮该行。</span><button class="btn sm ghost" style="margin-left:auto" onclick="closeModal()">返回原位置</button></div>
+  </div>
+</div>
+
+<script>
+/* ───────── mock 数据（来自 fixture todo-clip 真实内容） ───────── */
+const FLOW = [
+  {
+    no:"①", title:"用户操作：点击「添加任务」", badges:["b-src","源码事实"],
+    see:"用户在输入框里写下任务名，点击按钮。此刻这件事只存在于<b>页面自己</b>的记忆里——还没离开浏览器。",
+    code:{loc:"src/web/TasksPage.tsx:30-31",d:"<button onClick={handleSubmit}> —— 点击即触发提交函数。",line:30},
+    next:"把这件事交给前端处理函数 →", quiz:"这一步发生在浏览器里还是服务器里？凭什么这么判断？",
+    ans:"在浏览器里。onClick 是浏览器事件，此时还没有任何网络请求发出。"
+  },
+  {
+    no:"②", title:"前端处理：handleSubmit 发请求", badges:["b-src","源码事实"],
+    see:"<code>handleSubmit</code> 先把 <code>loading</code> 状态置为 true（按钮变灰，防止重复提交），再用 <code>fetch</code> 把任务名打包成 JSON 发往服务器。请求结束后 <code>finally</code> 把 loading 还原。",
+    code:{loc:"src/web/TasksPage.tsx:8-24",d:"第 9 行置位、第 11-15 行 fetch、第 22 行 finally 复位。",line:8},
+    next:"请求离开浏览器，到达后端接口 →", quiz:"如果网络很慢，用户连点三次按钮，会发出几次请求？为什么？",
+    ans:"只发一次。第一次点击后 loading=true 使按钮 disabled，后续点击无效——直到 finally 恢复。"
+  },
+  {
+    no:"③", title:"接口与后端：POST /api/tasks", badges:["b-src","源码事实"],
+    see:"Express 收到 POST，先做<b>业务校验</b>：没有 title 就直接返回 400，不往下走；有 title 就构造新任务对象返回 201。",
+    code:{loc:"src/server/index.ts:12-21",d:"第 12 行路由注册；第 14-17 行校验分支。",line:12},
+    next:"看数据这一层发生了什么 →", quiz:"校验放在前端还是后端？这里为什么返回 400 而不是 200？",
+    ans:"两层都要，后端是底线（前端可被绕过）。400 表示请求本身不合法，语义上区别于 201 已创建。"
+  },
+  {
+    no:"④", title:"数据变化：tasks 表（待核实）", badges:["b-stale","证据不足 → 开放问题"],
+    see:"按 schema，任务应写入 <code>tasks</code> 表。但注意——<b style='color:var(--mark-red)'>路由处理函数里没有出现任何数据库写入</b>。系统不替你圆故事：这里被标记为开放问题。",
+    code:{loc:"src/db/schema.sql:1-7",d:"表结构存在（证据），但'这条路由写入该表'缺乏证据。",line:1},
+    next:"先看接口返回了什么 →", quiz:"证据显示建了表，就能证明这个接口会往表里写数据吗？",
+    ans:"不能。'表存在'和'接口写入'是两个结论。表存在≠被使用——这正是七条不等式之一。",
+    back:["tasks 表被谁写入？","写入点：查不到任何 INSERT/UPDATE 证据 → 已转开放问题（诚实标注）","调用入口：POST /api/tasks（src/server/index.ts:12）","触发条件：handleSubmit（src/web/TasksPage.tsx:8）","用户操作：点击「添加任务」（第 30 行）—— 链在第①站闭合，唯独「写入」一环缺证据"]
+  },
+  {
+    no:"⑤", title:"结果返回：201 + 新任务", badges:["b-src","源码事实"],
+    see:"服务器返回 <code>201 Created</code> 和新任务对象；前端拿到响应后清空输入框，等待用户下一次输入。若网络失败，catch 分支目前什么都不做——这是体检发现的疑似问题。",
+    code:{loc:"src/server/index.ts:20",d:"res.status(201).json(...)；失败分支见 TasksPage.tsx:17 空 catch。",line:20},
+    next:"回到总览，看看整个项目还剩什么没弄懂 →", quiz:"请求成功、业务处理成功，是一回事吗？",
+    ans:"不是。'HTTP 201 返回'只证明接口层答应了；数据是否真正持久化属于另一层——这里恰恰缺证据。"
+  }
+];
+const SECS = [
+  {no:"①",t:"先说人话",d:"前端状态就是<b>页面自己偷偷记着的小纸条</b>：输入框里打了什么、按钮是不是转圈中。它只活在这个页面里，刷新就没了。",depth:0},
+  {no:"②",t:"前置知识：变量与函数",d:"看懂这段代码需要两个地基：<span class='chip' onclick='termPop(event)'>变量</span>（存值的盒子）和<span class='chip' onclick='termPop(event)'>函数</span>（把一连串动作打包，起个名字随叫随到）。",depth:0},
+  {no:"③",t:"生活类比",d:"会记住事情的便利贴——完整故事在上面那张寓言卡里，卡片最后一栏写了'类比在哪里不成立'，务必看。",depth:0},
+  {no:"④",t:"最小示例",d:"<pre class='code'>let 计数 = 0;      // 盒子里放了个 0\n计数 = 计数 + 1;   // 盒子变成 1\n// 每改一次，界面就跟着重画一次——这就是'状态驱动'</pre>",depth:0},
+  {no:"⑤",t:"在我的项目中",d:"TasksPage 有两张'便利贴'：<code>title</code>（输入框内容）和 <code>loading</code>（按钮是否转圈）。证据：TasksPage.tsx:5-6。为什么用状态而不是普通变量？——因为普通变量变了页面不会动。",depth:1},
+  {no:"⑥",t:"运行时发生了什么",d:"输入 → setState(title) → 页面重画 → 点按钮 → setLoading(true) → 按钮禁用 → fetch → finally setLoading(false) → 按钮恢复。失败分支：catch 目前是空的（体检疑似项）。",depth:1},
+  {no:"⑦",t:"容易理解错的地方",d:"状态<b>不是</b>数据库里的数据；改状态<b>不是</b>立刻改 DOM，而是触发重渲染；<code>loading</code> 置 true <b>不保证</b>请求一定成功。状态刷新即丢失——白板风吹字没的梗。",depth:1},
+  {no:"⑧",t:"我能否自己解释",d:"<button class='btn sm ghost' onclick=\"alert('demo：这里输入你的回答，答完才显示参考答案与证据')\">先自己说，再看参考答案</button>　参考要点：状态=组件私有、变化触发重渲染、刷新即失。",depth:1},
+  {no:"⑨",t:"答辩可能怎么问",d:"初级：状态和普通变量区别？进阶：为什么 finally 里恢复而不是 .then 里？边界：连续点击、组件卸载后 setState 会怎样？",depth:2},
+  {no:"⑩",t:"深入学习",d:"想继续：React 渲染机制 / 事件循环。想返回主线：<a href='#/flow' style='color:#3D4FA1;text-decoration:underline'>回到业务流程线</a>——学完就回去，不迷路。",depth:2}
+];
+const TERMS = {
+  变量:{plain:"存值的盒子，盒子上贴着名字。",pro:"具名内存引用，可读写其值。",ex:"let title = \"\"; 盒子里先是空字符串。",pit:"变量不是'东西本身'，是'装东西的盒子'——换值不等于换盒子。",avoid:"不要叫'容器'（易与容器组件混淆）"},
+  函数:{plain:"把一串动作打包，起个名字，随叫随到。",pro:"可复用的执行单元，可接收参数、返回值。",ex:"handleSubmit 就是把'发请求'打包成的函数。",pit:"函数定义了不等于执行了——定义是写菜谱，调用才是炒菜。",avoid:"不要叫'方法'混用（类里才叫方法）"},
+  中间件:{plain:"快递中转站：请求在到达目的地之前，先被它检查、加工或拦下。",pro:"请求处理管线中的独立环节，可读取/修改请求与响应，决定放行或终止。",ex:"express.json() 就是把请求体拆开装箱的中间件。",pit:'知道"中间件"三个字≠理解它在请求流程中何时执行——先于路由，按注册顺序。',avoid:"不要与'过滤器'混用（不同框架语义不同）"},
+  状态:{plain:"页面自己偷偷记着的小纸条，纸条一换，页面跟着重画。",pro:"组件内部可变的、变化会触发重新渲染的数据。",ex:"const [loading, setLoading] = useState(false)",pit:"状态不是数据库数据——刷新就没了；改状态不是直接改 DOM，而是触发重渲染。",avoid:"不要与'业务状态'混用（订单状态在数据库，不在这里）"},
+  路由:{plain:"门牌号分配表：什么样的网址由哪段代码来接待。",pro:"URL 与处理逻辑的映射规则。",ex:"app.get(\"/api/tasks\", handler) —— GET 这个地址就交给 handler。",pit:"前端路由和后端路由是两套路由表——同名的 /tasks 一个管页面一个管数据。",avoid:"不要叫'接口'（接口通常指 API 端点本身）"},
+  Promise:{plain:"一张取餐凭证：现在拿不到结果，但凭证据以后来取。",pro:"异步操作的占位对象，有 pending/fulfilled/rejected 三种状态。",ex:"await fetch(...) —— 等凭证兑现，拿到响应。",pit:"Promise 不保证成功，也不保证快——所以要有 catch 和超时；凭证本身不是结果。",avoid:"不要叫'异步函数'（async/await 是使用它的语法）"},
+  props:{plain:"父母递给孩子的便条：只许看，不许自己改。",pro:"父组件传给子组件的只读数据。",ex:"<TasksPage title=\"今日任务\" />",pit:"props 只读——想改它，得让父组件改，或者用本地状态复制一份。",avoid:"不要与'状态'混用（props 外来，状态自有）"},
+  事务:{plain:"一单打包生意：要么全做成，要么全当没发生。",pro:"一组数据库操作作为原子单元执行，成功一起提交，失败一起回滚。",ex:"转账 = 扣款 + 入账，必须同生共死。",pit:"快递分拣站的类比在这里不成立：真实事务有隔离级别、锁与回滚成本，不是'分好就完事'。",avoid:"不要叫'批次'（批次只是分组，无原子性承诺）"}
+};
+
+/* ───────── 路由 ───────── */
+function go(hash){
+  closeModal(); // 任何导航都收起弹层/提示
+  if(location.hash === hash){ render(); } // 同 hash 也要重渲染（hashchange 不会触发）
+  else location.hash = hash;
+}
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeModal(); });
+window.addEventListener("hashchange", render);
+function render(){
+  const h = location.hash || "#/home";
+  const base = h.split("?")[0];
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("on"));
+  const id = "s-" + base.replace("#/","").split("?")[0];
+  const el = document.getElementById(id);
+  if(el) el.classList.add("on");
+  document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === base));
+  if(id === "s-flow") showStation(0);
+  if(id === "s-node") renderSecs();
+  if(id === "s-kb"){ kbRender(); reviewRender(); }
+  if(id === "s-map"){ mapRender(); typeStart(); } else { typeStop(); }
+  if(id === "s-graph"){ if(!gOn){ gfiltersRender(); gwire(); gstart(); } }
+  else { gOn = false; }
+  if(id === "s-defend") renderDefend();
+  if(id === "s-challenge") pkSet(0);
+  if(id === "s-settings") presetRender();
+  if(id === "s-code"){ const p = new URLSearchParams(h.split("?")[1] || ""); codeOpen(p.get("f") || cFile, Number(p.get("l")) || 0); }
+  window.scrollTo(0,0);
+}
+/* ───────── 流程线 ───────── */
+let cur = 0, curAct = 0;
+function showStation(i){
+  cur = i;
+  document.querySelectorAll(".station").forEach((s,idx)=>{
+    s.classList.toggle("cur", idx===i);
+    s.classList.toggle("past", idx<i);
+    s.onclick = ()=>showStation(idx);
+  });
+  document.getElementById("trackDone").style.width = (i/(FLOW.length-1)*100)+"%";
+  const st = FLOW[i];
+  document.getElementById("stNo").textContent = "STEP " + st.no;
+  document.getElementById("stTitle").textContent = st.title;
+  document.getElementById("stBadges").innerHTML = st.badges.map(b=>{
+    const [c,t] = [b.startsWith("b-stale")?"b-stale":"b-src", b.split(" ")[1]];
+    return `<span class="badge ${c}">${t}</span>`;
+  }).join("");
+  stAction(0);
+}
+function stAction(a){
+  curAct = a;
+  [0,1,2,3].forEach(i=>document.getElementById("a"+i).classList.toggle("on", i===a));
+  const st = FLOW[cur];
+  const flip = document.getElementById("flipBox");
+  const face = document.getElementById("stFace");
+  if(a===0){
+    flip.classList.remove("flipped");
+    face.innerHTML = `<div class="card bd" style="font-size:13.5px;line-height:1.9">🧭 <b>看懂</b>：${st.see}</div>`;
+  } else if(a===1){
+    flip.classList.remove("flipped");
+    face.innerHTML = `<div class="ev"><div class="t">证据卡 · 源码事实</div><div class="loc" onclick="evModal(${cur})">${st.code.loc}</div><div class="d">${st.code.d}</div><button class="btn sm" style="margin-top:8px" onclick="codeJump('${st.code.loc}','来自流程线第 ${cur+1} 站「${st.title}」')">在代码库中打开 →</button></div>`;
+  } else if(a===2){
+    flip.classList.remove("flipped");
+    const backBtn = st.back ? `<button class="btn sm ghost" onclick="backModal(${cur})">⟲ 反向追踪</button>` : "";
+    face.innerHTML = `<div class="card bd" style="font-size:13.5px;line-height:1.9">➡️ <b>追下去</b>：${st.next} ${cur<FLOW.length-1?`<button class="btn sm" onclick="showStation(${cur+1})">前往下一站 ${FLOW[cur+1].no}</button>`:`<button class="btn sm ghost" onclick="go('#/overview')">返回总览</button>`}　${backBtn}</div>`;
+  } else {
+    flip.classList.add("flipped");
+    face.innerHTML = `<div class="card bd face back" style="border:2px solid var(--mark-red)"><div style="font-size:12px;color:var(--mark-red);letter-spacing:2px;font-weight:700">考考我 · 主动回忆</div><div style="font-size:14px;margin:8px 0;font-weight:600">${st.quiz}</div><button class="btn sm" onclick="alert('demo：先在心里作答，再点击查看')">看提示</button><button class="btn sm ghost" onclick="alert('参考答案：\\n'+this.dataset.a)" data-a="${st.ans.replace(/"/g,'&quot;')}">最后才对答案</button></div>`;
+  }
+}
+/* ───────── 知识点页 ───────── */
+let depth = 0;
+function setDepth(d){
+  depth = d;
+  document.querySelectorAll("#depth button").forEach((b,i)=>b.classList.toggle("on", i===d));
+  renderSecs();
+}
+function renderSecs(){
+  const box = document.getElementById("secs");
+  box.innerHTML = SECS.map((s,i)=>{
+    const open = s.depth === depth || (depth===2) || (depth===1 && s.depth<=1);
+    return `<div class="sec ${open?"open":""}" id="sec${i}">
+      <div class="hd" onclick="document.getElementById('sec${i}').classList.toggle('open')">
+        <span class="no">${s.no}</span><b style="font-weight:600">${s.t}</b>
+        <span class="badge b-infer" style="margin-left:6px">${s.depth===0?"入门":s.depth===1?"项目":"进阶"}</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="bd">${s.d}</div>
+    </div>`;
+  }).join("");
+}
+function termPop(e){
+  const t = TERMS[e.target.textContent.trim()];
+  document.getElementById("mNo").textContent = "TERM";
+  document.getElementById("mTitle").textContent = e.target.textContent.trim();
+  document.getElementById("mBody").innerHTML = `
+    <div class="term-body">
+      <div><span class="k">先说人话</span>：${t.plain}</div>
+      <div><span class="k">专业定义</span>：${t.pro}</div>
+      <div><span class="k">最小示例</span>：<code>${t.ex}</code></div>
+      <div><span class="k">常见误区</span>：${t.pit}</div>
+      <div><span class="k"> Avoid 别名裁决</span>：${t.avoid}</div>
+      <div><span class="k">项目中的用法</span>：<span class="loc mono" onclick="evModal(0)">TasksPage.tsx:5</span></div>
+      ${t.cmp?`<table class="cmp"><tr><th>对比项</th><th>${t.cmp.a}</th><th>${t.cmp.b}</th></tr>${t.cmp.rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}</table><div class="mut" style="font-size:11px">混淆对比卡 · 系统自动发现你把这两个概念放进了同一个易混簇</div>`:""}
+    </div>`;
+  document.getElementById("mask").classList.add("on");
+}
+/* ───────── 证据弹层 ───────── */
+const EVS = [
+  {loc:"src/web/TasksPage.tsx:5-9", lines:"5  const [title, setTitle] = useState(\"\");\n6  const [loading, setLoading] = useState(false);\n...\n9    setLoading(true);", ev:[["b-src","源码事实"],["b-none","未运行验证"]],
+   d:"useState 定义两个状态；第 9 行请求前置位。", scope:"断言范围：仅组件内状态定义与置位时机。", not:"尚未证明：真实运行时按钮禁用行为（需浏览器实测）。"}
+];
+function evModal(i){
+  const e = EVS[i];
+  document.getElementById("mNo").textContent = "EVIDENCE";
+  document.getElementById("mTitle").textContent = "证据卡 · " + e.loc;
+  document.getElementById("mBody").innerHTML = `
+    <div style="margin:8px 0">${e.ev.map(b=>`<span class="badge ${b[0]}">${b[1]}</span>`).join(" ")}</div>
+    <pre class="code">${e.lines.split("\n").map((l,idx)=>`<span class="ln">${idx+5}</span>${l}`).join("\n")}</pre>
+    <div class="d" style="font-size:13px;line-height:1.8;margin-top:8px">${e.d}</div>
+    <div class="notice"><span>断言范围：${e.scope}</span><button class="btn sm" style="margin-left:auto" onclick="codeJump('${e.loc}')">在代码库中打开 →</button><button class="btn sm ghost" onclick="closeModal()">关闭</button></div>
+    <div class="not-proved"><b>尚未证明</b>：${e.not}</div>`;
+  document.getElementById("mask").classList.add("on");
+}
+function closeModal(){ document.getElementById("mask").classList.remove("on"); }
+function nextQ(){ go("#/defend"); location.reload(); }
+/* ───────── 知识库体系 ───────── */
+const KB = [
+  {id:"ts", name:"TypeScript 语言机制", from:"package.json → typescript", items:[
+    {t:"变量与函数", kind:"核心概念", use:"src/utils/format.ts:1", st:"mastered", next:"—"},
+    {t:"异步函数与 Promise", kind:"核心概念", use:"src/web/TasksPage.tsx:11", st:"mastered", next:"—"},
+    {t:"模块导入 export / import", kind:"执行机制", use:"src/web/TasksPage.tsx:2", st:"learning", next:"3 天后"},
+  ]},
+  {id:"react", name:"React 前端", from:"package.json → react", items:[
+    {t:"前端状态 useState", kind:"核心概念", use:"src/web/TasksPage.tsx:5-6", st:"learning", next:"明天", demo:true},
+    {t:"事件处理 onClick", kind:"核心概念", use:"src/web/TasksPage.tsx:30", st:"new"},
+    {t:"组件与 props", kind:"核心概念", use:"src/web/TasksPage.tsx:4", st:"new"},
+    {t:"条件渲染与列表", kind:"核心概念", use:"—", st:"new"},
+  ]},
+  {id:"express", name:"Express 后端", from:"package.json → express ^4.19", items:[
+    {t:"路由注册 app.get / app.post", kind:"执行机制", use:"src/server/index.ts:12-25", st:"learning", next:"3 天后"},
+    {t:"请求与响应对象", kind:"核心概念", use:"src/server/index.ts:14", st:"new"},
+    {t:"错误处理与状态码语义", kind:"验证与异常", use:"src/server/index.ts:15-17", st:"new"},
+  ]},
+  {id:"sql", name:"SQL 数据层", from:"src/db/schema.sql", items:[
+    {t:"建表与约束 PRIMARY KEY", kind:"核心概念", use:"src/db/schema.sql:1-7", st:"new"},
+    {t:"事务与数据一致性", kind:"核心概念", use:"—", st:"new"},
+  ]},
+  {id:"tooling", name:"工程与工具", from:"npm / lockfile / 环境配置", items:[
+    {t:"npm 与依赖管理", kind:"设计决策", use:"package.json", st:"new"},
+    {t:"环境变量与密钥边界", kind:"验证与异常", use:"—", st:"new"},
+  ]},
+];
+const KINDS = ["业务功能","执行机制","核心概念","设计决策","验证与异常"];
+const STM = {mastered:["b-run","已验证掌握"], learning:["b-infer","练习中"], new:["b-none","未学习"], stale:["b-stale","需重验"]};
+let kbViewMode = 0, kbDomain = "react";
+
+function kbRender(){
+  // 左栏域列表
+  document.getElementById("kbDomains").innerHTML =
+    `<div class="hd"><span class="file-no">DOM</span><b>技术域（来自项目栈）</b></div>` +
+    KB.map(d=>{
+      const m = d.items.filter(i=>i.st==="mastered").length;
+      return `<div class="hd" style="cursor:pointer;border-bottom:1px solid var(--grid)" onclick="kbSetDomain('${d.id}')">
+        <div><b style="font-size:13px;${kbDomain===d.id?"":"font-weight:500"}">${d.name}</b>
+        <div class="mut" style="font-size:11px;margin-top:2px">${m}/${d.items.length} 已掌握 · ${d.items.length} 条</div></div>
+      </div>`;
+    }).join("");
+  const body = document.getElementById("kbItems");
+  if(kbViewMode===0){
+    const d = KB.find(x=>x.id===kbDomain);
+    body.innerHTML = `<div class="hd"><span class="file-no">KB-${d.id.toUpperCase()}</span><b>${d.name}</b>
+      <span class="right badge b-src">来自项目栈：${d.from}</span></div>` + kbTable(d.items);
+  } else {
+    body.innerHTML = `<div class="hd"><span class="file-no">KB-KIND</span><b>按五类学习对象</b></div>` +
+      KINDS.map(k=>{
+        const items = KB.flatMap(d=>d.items).filter(i=>i.kind===k);
+        if(!items.length) return "";
+        return `<div style="padding:10px 18px 4px;font-size:12px;color:var(--evidence-amber);font-weight:700">${k} · ${items.length}</div>` + kbTable(items);
+      }).join("");
+  }
+}
+function kbTable(items){
+  return `<table class="bd" style="width:100%;font-size:12.5px;border-collapse:collapse">` +
+    items.map(i=>{
+      const [cls,label] = STM[i.st];
+      return `<tr style="border-bottom:1px solid var(--grid)">
+        <td style="padding:8px 6px">${i.demo?`<a href="#/node" style="color:#3D4FA1;text-decoration:underline">${i.t}</a>`:i.t}
+          <span class="badge b-infer" style="margin-left:6px">${i.kind}</span></td>
+        <td class="mono mut" style="padding:8px 6px;text-align:right">项目用法：${i.use}</td>
+        <td style="padding:8px 0;text-align:right;white-space:nowrap"><span class="badge ${cls}">${label}</span>
+          ${i.next&&i.next!=="—"?`<span class="mut" style="font-size:11px;margin-left:6px">复习 ${i.next}</span>`:""}</td>
+      </tr>`;
+    }).join("") + `</table>`;
+}
+function kbSetDomain(id){ kbDomain = id; if(kbViewMode===1) kbSetView(0); else kbRender(); }
+function kbSetView(m){ kbViewMode = m; document.querySelectorAll("#kbView button").forEach((b,i)=>b.classList.toggle("on", i===m)); kbRender(); }
+
+/* 复习队列（FSRS：调度到期 → 回忆 → 翻面 → 评分 → 新间隔） */
+const REVIEW = [
+  {q:"为什么 loading 的恢复写在 finally 里，而不是写在请求成功的分支里？", a:"失败也要恢复——写在成功分支里，一旦请求失败按钮永远禁用。finally 保证两条路都走。", from:"前端状态 useState", iv:"记住 → 间隔 1天 → 3天"},
+  {q:"POST /api/tasks 校验失败时，返回什么状态码？语义是什么？", a:"400 Bad Request：请求本身不合法（缺 title），区别于 201 已创建。", from:"Express 错误处理", iv:"记住 → 间隔 1天 → 3天"},
+  {q:"空 catch 意味着什么？用户会看到什么？", a:"异常被吞掉：界面无提示、console 无报错，问题被隐藏——这正是体检把它列为疑似追问点的原因。", from:"体检 · TasksPage.tsx:17", iv:"记住 → 间隔 1天 → 3天"},
+];
+function reviewRender(){
+  document.getElementById("reviewQueue").innerHTML = REVIEW.map((r,i)=>`
+    <div class="flip" id="rv${i}" style="min-height:120px"><div class="flip-inner">
+      <div class="face card" style="padding:12px 14px;cursor:pointer;height:100%" onclick="document.getElementById('rv${i}').classList.add('flipped')">
+        <div style="font-size:11px;color:var(--evidence-amber);font-weight:700">REVIEW · ${r.from}</div>
+        <div style="font-size:13px;margin-top:6px;line-height:1.8;font-weight:600">${r.q}</div>
+        <div class="mut" style="font-size:11px;margin-top:8px">先回忆，点击卡片翻面</div>
+      </div>
+      <div class="face back card" style="padding:12px 14px;border:1px solid var(--pass-green)">
+        <div style="font-size:11px;color:var(--pass-green);font-weight:700">参考答案</div>
+        <div style="font-size:12.5px;margin:6px 0;line-height:1.8">${r.a}</div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <button class="btn sm" style="background:var(--pass-green);border-color:var(--pass-green)" onclick="event.stopPropagation();reviewGrade(${i},true)">记得</button>
+          <button class="btn sm" style="background:var(--mark-red);border-color:var(--mark-red)" onclick="event.stopPropagation();reviewGrade(${i},false)">忘了</button>
+        </div>
+        <div class="mut" style="font-size:10.5px;margin-top:6px">${r.iv}</div>
+      </div>
+    </div></div>`).join("");
+}
+function reviewGrade(i, ok){
+  const box = document.getElementById("rv"+i).closest(".face");
+  const card = document.getElementById("rv"+i);
+  card.parentElement.outerHTML = `<div class="card bd" style="text-align:center;font-size:12.5px">
+    <span class="badge ${ok?"b-run":"b-stale"}">${ok?"已复习 · 下次 3 天后":"忘了 · 重回队列，明天再见"}</span>
+    <div class="mut" style="margin-top:6px;font-size:11px">FSRS 按你的记忆状态调度，不按固定天数</div></div>`;
+}
+
+/* ───────── AI 分析现场 ───────── */
+const STAGES = [
+  {n:"架构总览", s:"done", tok:"1,248 tok · 缓存命中"},
+  {n:"模块深挖", s:"done", tok:"3,906 tok · 缓存命中"},
+  {n:"业务流程还原", s:"run", tok:"正在生成…", meter:62},
+  {n:"知识点生成", s:"q", tok:"排队"},{n:"术语归并", s:"q", tok:"排队"},{n:"关系建边", s:"q", tok:"排队"},
+  {n:"双重校验", s:"q", tok:"排队"},{n:"全库体检", s:"q", tok:"排队"},{n:"git 考古", s:"q", tok:"排队"},{n:"覆盖统计", s:"q", tok:"排队"},
+];
+function mapRender(){
+  document.getElementById("stageList").innerHTML = STAGES.map(st=>{
+    const ic = st.s==="done"?'<span class="ic done">✓</span>':st.s==="run"?'<span class="ic run">⟳</span>':'<span class="ic q">·</span>';
+    const mid = st.s==="run"
+      ? `<div class="bar"><i class="warn" style="width:${st.meter}%"></i></div>`
+      : `<span class="mut" style="font-size:11px">${st.n==="架构总览"?"输出：分层与模块划分":st.n==="模块深挖"?"输出：3 模块 · 职责与机制":st.n==="业务流程还原"?"输出：五站链 + 失败分支":""}</span>`;
+    return `<div class="stage">${ic}<div><b style="font-weight:${st.s==="q"?"400":"600"};${st.s==="q"?"color:var(--muted)":""}">${st.n}</b>${st.s==="run"?' <span class="badge b-ai">LLM 运行中</span>':""}<div>${mid}</div></div><div class="bar" style="height:6px;background:#EDF1F7"><i style="width:${st.s==="done"?100:st.s==="run"?st.meter:0}%"></i></div><div class="tok">${st.tok}</div></div>`;
+  }).join("");
+}
+const TYPE_TEXT = "阅读 src/web/TasksPage.tsx + src/server/index.ts（证据已绑定）\n提炼第②步：handleSubmit 置位 loading → 防重复提交（TasksPage.tsx:9）\n生成段落：①先说人话 ③生活类比「便利贴」 ④最小示例…\n标注类比边界：状态变化会触发重渲染，便利贴不会\n输出前置术语清单：变量 / 函数 / Promise\n→ zod 校验通过 → 写入知识库「React 前端」域 → 关联流程线第②站";
+let typeTimer = null;
+function typeStart(){
+  typeStop();
+  const box = document.getElementById("typeBox");
+  let i = 0;
+  typeTimer = setInterval(()=>{
+    i += 2;
+    box.innerHTML = TYPE_TEXT.slice(0, i).replace(/\n/g,"<br>") + '<span class="cursor"></span>';
+    if(i >= TYPE_TEXT.length){
+      typeStop();
+      box.innerHTML = TYPE_TEXT.replace(/\n/g,"<br>") + '<span class="badge b-run" style="margin-left:8px">本条已落库 ✓</span>';
+    }
+  }, 28);
+}
+function typeStop(){ if(typeTimer){ clearInterval(typeTimer); typeTimer = null; } }
+
+/* ───────── 知识图谱：八类全量 · 2D/3D 双视图 ───────── */
+const GT = {
+  module:{c:"#1B2A4A",label:"模块",jump:"#/overview"}, feature:{c:"#C43D3D",label:"业务功能",jump:"#/flow"},
+  mechanism:{c:"#B7791F",label:"执行机制",jump:"#/flow"}, concept:{c:"#3D4FA1",label:"核心概念",jump:"#/node"},
+  decision:{c:"#7C5BA6",label:"设计决策",jump:"#/overview"}, validation:{c:"#2E7D4F",label:"验证与异常",jump:"#/overview"},
+  term:{c:"#5B6B85",label:"术语",jump:"#/kb"}, file:{c:"#98A7C0",label:"文件",jump:"#/code"},
+};
+const GN = [
+  ["添加任务","feature",16,"mastered","流程线 FLOW-01","#/flow"],
+  ["server 模块","module",12,"none","src/server","#/overview"],["web 模块","module",12,"none","src/web","#/overview"],["db 模块","module",10,"none","src/db","#/overview"],
+  ["路由注册","mechanism",10,"learning","src/server/index.ts:12","#/flow"],["状态驱动渲染","mechanism",9,"learning","src/web/TasksPage.tsx:5","#/node"],
+  ["前端状态 useState","concept",14,"learning","TasksPage.tsx:5-6","#/node"],["Promise","concept",9,"mastered","TasksPage.tsx:11","#/node"],["事件处理","concept",8,"new","TasksPage.tsx:30","#/node"],["props","concept",7,"new","—","#/node"],["中间件","concept",9,"new","express 管线","#/node"],["事务","concept",7,"new","—","#/node"],
+  ["Express 选型","decision",9,"none","package.json:4","#/overview"],
+  ["错误处理与状态码","validation",8,"new","index.ts:15-17","#/overview"],["空 catch 风险","validation",8,"learning","TasksPage.tsx:17","#/overview"],
+  ["变量","term",7,"mastered","术语表","#/kb"],["函数","term",7,"mastered","术语表","#/kb"],["中间件","term",7,"new","术语表","#/kb"],["状态","term",10,"learning","术语表","#/kb"],["路由","term",8,"new","术语表","#/kb"],["props","term",7,"new","术语表","#/kb"],["事务","term",6,"new","术语表","#/kb"],
+  ["src/server/index.ts","file",10,"none","18,204 字符","#/overview"],["src/web/TasksPage.tsx","file",10,"none","37 行","#/overview"],["src/db/schema.sql","file",6,"none","7 行","#/overview"],["src/utils/format.ts","file",6,"none","5 行","#/overview"],["package.json","file",6,"none","manifest","#/overview"],["README.md","file",5,"none","—","#/overview"],
+];
+const GE = [["添加任务","server 模块"],["添加任务","web 模块"],["添加任务","db 模块"],
+  ["server 模块","路由注册"],["server 模块","src/server/index.ts"],["web 模块","src/web/TasksPage.tsx"],["db 模块","src/db/schema.sql"],
+  ["路由注册","中间件"],["路由注册","路由"],["前端状态 useState","状态驱动渲染"],["前端状态 useState","状态"],["前端状态 useState","src/web/TasksPage.tsx"],
+  ["Promise","异步函数与 Promise"],["Promise","前端状态 useState"],["事件处理","前端状态 useState"],["props","组件与 props"],
+  ["Express 选型","server 模块"],["Express 选型","中间件"],["错误处理与状态码","src/server/index.ts"],["空 catch 风险","src/web/TasksPage.tsx"],
+  ["变量","函数"],["变量","前端状态 useState"],["事务","src/db/schema.sql"],["路由注册","错误处理与状态码"],
+  ["src/server/index.ts","src/db/schema.sql"],["src/web/TasksPage.tsx","src/utils/format.ts"],["web 模块","README.md"],["web 模块","package.json"]];
+const gnodes = GN.map((n,i)=>({id:i,label:n[0],type:n[1],size:n[2],mastery:n[3],use:n[4],jump:n[5],
+  x:(Math.random()-0.5)*300, y:(Math.random()-0.5)*300, z:(Math.random()-0.5)*300, vx:0, vy:0, vz:0}));
+const gIndex = {}; gnodes.forEach(n=>gIndex[n.label]=n);
+const gedges = GE.map(e=>[gIndex[e[0]], gIndex[e[1]]]).filter(e=>e[0]&&e[1]);
+
+let gMode="3d", gYaw=0.5, gPitch=-0.2, gZoom=1, gPanX=0, gPanY=0, gSpin=false;
+let gSel=null, gHover=null, gDragging=false, gMoved=0, gLX=0, gLY=0, gOn=false;
+let gTypes = new Set(Object.keys(GT));
+let gSearchText = "";
+
+function gsim(){
+  const N = gnodes;
+  for(let i=0;i<N.length;i++) for(let j=i+1;j<N.length;j++){
+    const a=N[i],b=N[j];
+    let dx=a.x-b.x, dy=a.y-b.y, dz=(gMode==="3d")?(a.z-b.z):0;
+    const d2 = dx*dx+dy*dy+dz*dz || 1, d = Math.sqrt(d2), f = 2600/d2;
+    dx/=d; dy/=d; dz/=d;
+    a.vx+=dx*f; a.vy+=dy*f; if(gMode==="3d")a.vz+=dz*f;
+    b.vx-=dx*f; b.vy-=dy*f; if(gMode==="3d")b.vz-=dz*f;
+  }
+  for(const [a,b] of gedges){
+    const rest = 80, k = 0.015;
+    let dx=b.x-a.x, dy=b.y-a.y, dz=b.z-a.z;
+    const d = Math.sqrt(dx*dx+dy*dy+dz*dz)||1, f = (d-rest)*k;
+    dx/=d; dy/=d; dz/=d;
+    a.vx+=dx*f; a.vy+=dy*f; if(gMode==="3d")a.vz+=dz*f;
+    b.vx-=dx*f; b.vy-=dy*f; if(gMode==="3d")b.vz-=dz*f;
+  }
+  for(const n of N){
+    n.vx-=n.x*0.004; n.vy-=n.y*0.004; if(gMode==="3d")n.vz-=n.z*0.004;
+    n.vx*=0.85; n.vy*=0.85; n.vz*=0.85;
+    n.x+=n.vx; n.y+=n.vy; n.z+=n.vz;
+  }
+}
+function gdraw(){
+  const cv = document.getElementById("gcanvas"); if(!cv) return;
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, cx = W/2, cy = H/2;
+  ctx.clearRect(0,0,W,H);
+  // 网格底
+  ctx.fillStyle = "#FBFCFE"; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "#EDF1F7"; ctx.lineWidth = 1;
+  for(let x=0;x<W;x+=28){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=28){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  if(gMode==="3d" && gSpin && !gDragging && !gHover){
+    gYaw += 0.0016; // 自动旋转：默认关（工具栏可开），悬停即暂停，保证点击
+  }
+  gsim();
+  const cy_=Math.cos(gYaw), sy_=Math.sin(gYaw), cp=Math.cos(gPitch), sp=Math.sin(gPitch);
+  const fov = 500, cam = 700/gZoom;
+  const proj = n => {
+    let x=n.x, y=n.y, z=n.z;
+    if(gMode==="3d"){
+      let x1 = x*cy_ - z*sy_, z1 = x*sy_ + z*cy_;
+      let y1 = y*cp - z1*sp, z2 = y*sp + z1*cp;
+      const s = fov/(cam + z2);
+      return {sx:cx + x1*s + gPanX, sy:cy + y1*s + gPanY, s};
+    }
+    return {sx:cx + x*gZoom + gPanX, sy:cy + y*gZoom + gPanY, s:gZoom};
+  };
+  const visible = gnodes.filter(n=>gTypes.has(n.type));
+  const P = new Map();
+  visible.forEach(n=>P.set(n, proj(n)));
+  // 边
+  for(const [a,b] of gedges){
+    if(!P.has(a)||!P.has(b)) continue;
+    const pa=P.get(a), pb=P.get(b);
+    const hot = (gSel===a||gSel===b||gHover===a||gHover===b);
+    ctx.strokeStyle = hot ? "rgba(196,61,61,.65)" : "rgba(27,42,74,.16)";
+    ctx.lineWidth = hot?2:1;
+    ctx.beginPath(); ctx.moveTo(pa.sx,pa.sy); ctx.lineTo(pb.sx,pb.sy); ctx.stroke();
+  }
+  // 节点（按深度排序，3D 近的盖住远的）
+  const order = [...visible].sort((a,b)=>(gMode==="3d")?(proj(b).s - proj(a).s):0);
+  for(const n of order){
+    const p = P.get(n); if(!p) continue;
+    const r = Math.max(3, n.size * (gMode==="3d"?p.s/1.1:0.9));
+    const t = GT[n.type];
+    const searched = gSearchText && n.label.toLowerCase().includes(gSearchText.toLowerCase());
+    // 3D 深度雾化：远的淡、近的实——平面感的天敌
+    if(gMode==="3d") ctx.globalAlpha = Math.max(0.35, Math.min(1, (p.s - 0.45) / 0.6));
+    else ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, r, 0, 7);
+    ctx.fillStyle = t.c;
+    if(n===gSel) ctx.globalAlpha = 1;
+    if(searched || n===gHover || n===gSel){ ctx.shadowColor = "rgba(196,61,61,.9)"; ctx.shadowBlur = 14; }
+    ctx.fill(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    if(n.mastery!=="none"){ // 掌握度外环
+      ctx.beginPath(); ctx.arc(p.sx,p.sy,r+3.5,0,7);
+      ctx.strokeStyle = n.mastery==="mastered"?"#2E7D4F":n.mastery==="learning"?"#B7791F":"rgba(0,0,0,.1)";
+      ctx.lineWidth = 2; ctx.stroke();
+    }
+    // 全部节点常显标签：不让任何一个节点是"无名圆点"
+    const fs = n.size>=9?11.5:10;
+    ctx.font = (n===gSel?"bold ":"")+fs+"px "+getComputedStyle(document.body).fontFamily;
+    ctx.textAlign="center";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(251,252,254,.92)";
+    ctx.strokeText(n.label, p.sx, p.sy - r - 5);
+    ctx.fillStyle = "#1B2A4A";
+    ctx.fillText(n.label, p.sx, p.sy - r - 5);
+  }
+  document.getElementById("gcount").textContent = `显示 ${visible.length}/${gnodes.length} 节点 · ${gedges.length} 条边`;
+}
+function gloop(){ if(gOn){ gdraw(); requestAnimationFrame(gloop); } }
+function gstart(){
+  const cv = document.getElementById("gcanvas");
+  // 画布内部分辨率与 CSS 显示尺寸 1:1，消除命中偏移（之前点击失灵的主因）
+  const gsize = () => { cv.width = cv.clientWidth; cv.height = cv.clientHeight; };
+  gsize();
+  window.addEventListener("resize", () => { if(gOn) gsize(); gdraw(); });
+  if(!gOn){ gOn = true; gloop(); }
+}
+function gToggleSpin(){
+  gSpin = !gSpin;
+  document.getElementById("spinChip").textContent = gSpin ? "⟳ 自动旋转：开" : "⟳ 自动旋转：关";
+  document.getElementById("spinChip").classList.toggle("on", gSpin);
+}
+function gsetMode(m){
+  gMode = m; gZoom=1; gPanX=0; gPanY=0;
+  document.getElementById("m2d").classList.toggle("on", m==="2d");
+  document.getElementById("m3d").classList.toggle("on", m==="3d");
+  if(m==="2d"){ gnodes.forEach(n=>{ n.z=0; n.vz=0; }); }
+  else {
+    // 从 2D 切回 3D：z 全为 0 会导致图永久成平面——检测 z 方差，过扁则重新注入深度
+    const zs = gnodes.map(n=>n.z);
+    const mean = zs.reduce((a,b)=>a+b,0)/zs.length;
+    const std = Math.sqrt(zs.reduce((a,b)=>a+(b-mean)*(b-mean),0)/zs.length);
+    if(std < 25) gnodes.forEach(n=>{ n.z=(Math.random()-0.5)*280; n.vz=0; });
+  }
+}
+function gselect(n){
+  gSel = n;
+  const card = document.getElementById("gcard");
+  if(!n){ card.innerHTML=""; return; }
+  const t = GT[n.type];
+  const [mc,ml] = STM[n.mastery] ? STM[n.mastery] : ["b-none","未学习"];
+  const rels = gedges.filter(e=>e[0]===n||e[1]===n).length;
+  card.innerHTML = `<div class="card" id="gcardBox"><div class="hd">
+      <span class="file-no" style="color:${t.c}">${t.label}</span><b>${n.label}</b></div>
+    <div class="bd">
+      <div><span class="badge ${mc}">${ml}</span> <span class="badge b-infer">重要度 ${n.size}</span></div>
+      <div>项目用法：<span class="mono">${n.use}</span></div>
+      <div>关联 ${rels} 条 · 证据锚点已同步知识库</div>
+      <div class="jump"><button class="btn sm" onclick="go('${n.jump}')">进入内容 →</button>
+      <button class="btn sm ghost" onclick="go('#/kb')">在知识库中查看</button></div>
+    </div></div>`;
+}
+function gfiltersRender(){
+  document.getElementById("gfilters").innerHTML = Object.entries(GT).map(([k,v])=>
+    `<span class="tchip ${gTypes.has(k)?"on":""}" style="${gTypes.has(k)?`background:${v.c}`:""}" onclick="gToggleType('${k}')">${v.label}</span>`).join("");
+  document.getElementById("glegend").innerHTML =
+    Object.entries(GT).map(([k,v])=>`<span><i style="background:${v.c}"></i>${v.label}</span>`).join("") +
+    `<span><i style="border:2px solid #2E7D4F;background:#fff;width:7px;height:7px"></i>已验证掌握</span>` +
+    `<span><i style="border:2px solid #B7791F;background:#fff;width:7px;height:7px"></i>练习中</span>` +
+    `<span style="margin-left:auto">双击节点直达内容 · 拖拽旋转（3D） · 滚轮缩放</span>`;
+}
+function gToggleType(k){ gTypes.has(k)?gTypes.delete(k):gTypes.add(k); gfiltersRender(); gdraw(); }
+
+function gwire(){
+  const cv = document.getElementById("gcanvas");
+  // 坐标换算：鼠标位置 → 画布内部坐标（修复 CSS 缩放导致的命中偏移）
+  const gpos = e => {
+    const r = cv.getBoundingClientRect();
+    return { x:(e.clientX - r.left) * (cv.width / r.width), y:(e.clientY - r.top) * (cv.height / r.height) };
+  };
+  cv.addEventListener("mousedown", e=>{ gDragging=true; gMoved=0; const p=gpos(e); gLX=p.x; gLY=p.y; cv.classList.add("dragging"); });
+  cv.addEventListener("mousemove", e=>{
+    const p = gpos(e);
+    if(gDragging){
+      const dx=p.x-gLX, dy=p.y-gLY; gMoved += Math.abs(dx)+Math.abs(dy);
+      if(gMoved > 6){ // 6px 死区：手抖不会触发旋转/平移，也不吞点击
+        if(gMode==="3d"){ gYaw += dx*0.008; gPitch = Math.max(-1.3,Math.min(1.3,gPitch + dy*0.008)); }
+        else { gPanX += dx; gPanY += dy; }
+        gLX=p.x; gLY=p.y;
+      }
+    } else {
+      gHover = ghit(p.x, p.y);
+      cv.style.cursor = gHover ? "pointer" : "grab";
+    }
+  });
+  cv.addEventListener("mouseup", e=>{
+    cv.classList.remove("dragging");
+    if(gDragging && gMoved <= 6){ gselect(ghit(gpos(e).x, gpos(e).y)); }
+    gDragging=false;
+  });
+  cv.addEventListener("dblclick", e=>{ const p=gpos(e); const n = ghit(p.x,p.y); if(n) go(n.jump); });
+  cv.addEventListener("wheel", e=>{ e.preventDefault(); gZoom = Math.max(0.4, Math.min(3, gZoom * (e.deltaY>0?0.92:1.09))); });
+  document.getElementById("gsearch").addEventListener("input", e=>{ gSearchText = e.target.value; });
+}
+function ghit(mx,my){
+  const cv = document.getElementById("gcanvas");
+  const ctx = cv.getContext("2d");
+  const cx = cv.width/2, cy = cv.height/2;
+  const cy_=Math.cos(gYaw), sy_=Math.sin(gYaw), cp=Math.cos(gPitch), sp=Math.sin(gPitch);
+  let best=null, bd=1e9;
+  for(const n of gnodes){
+    if(!gTypes.has(n.type)) continue;
+    let p;
+    if(gMode==="3d"){
+      const x1=n.x*cy_-n.z*sy_, z1=n.x*sy_+n.z*cy_;
+      const y1=n.y*cp-z1*sp, z2=n.y*sp+z1*cp;
+      const s=500/(700/gZoom + z2);
+      p={sx:cx+x1*s+gPanX, sy:cy+y1*s+gPanY};
+    } else p={sx:cx+n.x*gZoom+gPanX, sy:cy+n.y*gZoom+gPanY};
+    const d = Math.hypot(mx-p.sx, my-p.sy);
+    const r = Math.max(6, n.size*1.1);
+    if(d < r+4 && d < bd){ bd=d; best=n; }
+  }
+  return best;
+}
+
+/* ───────── 新建分析：导入模拟 ───────── */
+function importRun(){
+  const bar=document.getElementById("impBar"), fill=document.getElementById("impFill"), log=document.getElementById("impLog");
+  bar.style.display="block";
+  const steps=[["realpath 校验授权根目录（越界读取将被拒绝）…",15],["扫描 412 个文件 · 跳过 2 个（权限/超限，原因已记录）…",55],["计算 SHA-256 快照（run_files：后续阶段据此核对）…",80],["识别技术栈：Node / Express / React / TS + lockfile 真实版本…",100]];
+  let i=0;
+  const t=setInterval(()=>{
+    if(i>=steps.length){ clearInterval(t);
+      log.innerHTML='导入完成 ✓ <button class="btn sm" style="margin-left:8px" onclick="go(\'#/scan\')">查看 Scan 清单 →</button>';
+      return; }
+    log.textContent=steps[i][0]; fill.style.width=steps[i][1]+"%"; i++;
+  },700);
+}
+
+/* ───────── 答辩模拟：完整闭环（一次一问→阶梯提示→评分→复述） ───────── */
+const DQ = [
+ {q:"用户点击「添加任务」后，前端发生了什么？请说清楚到函数级别。",
+  hints:["方向：按钮按下之后、请求发出之前，页面还有什么在变化？","具体到行：TasksPage.tsx 第 5-9 行——先定义了什么，第 9 行做了什么？","参考答案：点击 → handleSubmit → 置位 loading 防重复提交 → fetch POST /api/tasks → finally 恢复（证据 :8-24）"],
+  points:"预置要点 T-2「请求前状态置位」· T-3「finally 兜底」", evi:"TasksPage.tsx:8-24", scoreA:4, gapsA:"函数名与请求目标和源码一致", scoreB:2, gapsB:"漏了 loading 防重复提交；漏了 finally 恢复"},
+ {q:"建了 tasks 表，就能证明 POST /api/tasks 会往表里写数据吗？",
+  hints:["方向：『表存在』和『接口使用它』是同一层证据吗？","具体：打开 index.ts:12-21——处理函数里有任何数据库调用吗？","参考答案：不能。当前无 DB 调用，持久化证据缺失。诚实回答『这是开放问题』反而加分"],
+  points:"七条不等式 · 第 2 条", evi:"index.ts:12-21 + schema.sql", scoreA:3, gapsA:"结论方向正确", scoreB:3, gapsB:"要能主动指出『还缺哪块证据』"},
+ {q:"让你现在给这个功能加防重复提交，你怎么验证改对了？",
+  hints:["方向：验收条件先行——什么叫『改对了』？","具体：验收 = 连点 3 次仅 1 次请求；验证分层 = tsc（类型层）+ 浏览器实测（行为层，需授权）","参考答案：先定位 → 最小改动 → 明确验收条件 → diff 审查 → 分层验证 → 亲自解释（即 AI 协作五步法）"],
+  points:"挑战验收协议 · 六查", evi:"CH-02 预置验收条件", scoreA:5, gapsA:"—", scoreB:5, gapsB:"—"},
+];
+let dI=0, dPhase="ask", dHints=[0,0,0];
+function renderDefend(){
+  const chat=document.getElementById("dchat"), ctl=document.getElementById("dctl");
+  if(!chat) return;
+  const q=DQ[dI];
+  document.getElementById("dTitle").textContent=`模拟答辩 · 第 ${dI+1} 问 / 共 ${DQ.length} 问`;
+  const side=document.getElementById("dside");
+  if(side) side.innerHTML=`<div class="card"><div class="hd"><span class="file-no">DR-01</span><b>本轮薄弱点（同步学习路径）</b></div>
+    <div class="bd" style="font-size:12.5px;line-height:2">
+      · 「异步与 loading 状态」——已降为<b style="color:var(--mark-red)">练习中</b>，明天复习队列 +1<br>
+      · 「错误分支：空 catch 的后果」——来自体检疑似项，未学
+    </div></div>
+    <div class="card" style="margin-top:14px"><div class="hd"><span class="file-no">DR-02</span><b>缺口对应知识点</b></div>
+    <div class="bd" style="font-size:12.5px;line-height:2.2">
+      <a href="#/node" style="color:#3D4FA1;text-decoration:underline">前端状态 useState</a>（练习中）<br>
+      <a href="#/kb" style="color:#3D4FA1;text-decoration:underline">知识库 · Express 错误处理域</a>（未学习）<br>
+      <a href="#/flow" style="color:#3D4FA1;text-decoration:underline">流程线第②站</a>（重走一遍考考我）
+    </div></div>
+    <div class="card" style="margin-top:14px"><div class="hd"><span class="file-no">DR-03</span><b>答辩任务书锚点</b></div>
+    <div class="bd" style="font-size:12.5px;line-height:2;color:#41506B">任务书②「评委最可能追问」：任务数据存哪了 / 为什么用 Express / 异常分支——<b>本题正在命中第 3 条</b></div></div>`;
+  let html=`<div class="msg judge"><span class="badge b-ai">评委 AI · 依据证据与预置要点出题</span><br><b>评委（第 ${dI+1}/${DQ.length} 问）：</b>${q.q}</div>`;
+  if(dPhase==="ask"){
+    html+=`<div class="msg me" style="opacity:.8">（像答辩现场一样，口述你的回答…）</div>`;
+    chat.innerHTML=html;
+    ctl.innerHTML=`<div style="display:flex;gap:8px;margin-top:16px;max-width:900px">
+      <input id="dans" class="mono" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13px" placeholder="口述或键入你的回答…">
+      <button class="btn sm ghost" id="dMic" onclick="micToggle('dans')">🎙 语音作答</button>
+      <button class="btn" onclick="submitAnswer()">提交回答</button></div>
+      <div class="mut" style="font-size:11px;margin-top:8px;max-width:900px">答不全没关系：评分后会出现<b style="color:var(--evidence-amber)">阶梯提示</b>——小提示 → 具体到行 → 最后才是参考答案。语音识别：Chrome/Edge 原生支持（正式应用跑在 localhost 天然可用）；当前 file:// 打开被浏览器拦麦克风时自动降级为「模拟转写」预览。</div>`;
+  } else if(dPhase==="scored"){
+    html+=`<div class="msg me">（你刚才的回答，评分如下）</div>
+    <div class="msg judge"><b>评委点评：</b>
+      <div class="score2">
+        <div class="ax"><div class="t">轴 A · 代码事实自洽</div><div class="v" style="color:${q.scoreA>=4?"var(--pass-green)":"var(--mark-red)"}">${q.scoreA}<span style="font-size:12px;color:var(--muted)">/5</span></div><div class="gaps">${q.gapsA}</div></div>
+        <div class="ax"><div class="t">轴 B · 兑现声称</div><div class="v" style="color:${q.scoreB>=4?"var(--pass-green)":"var(--mark-red)"}">${q.scoreB}<span style="font-size:12px;color:var(--muted)">/5</span></div><div class="gaps">${q.gapsB}</div></div>
+      </div>
+      <div class="notice" style="border:0;padding-top:8px">评分依据：${q.points} + 证据 ${q.evi}　·　缺口对应：<a href="#/node" style="color:#3D4FA1;text-decoration:underline">前端状态是什么？</a></div>
+    </div>`;
+    chat.innerHTML=html;
+    const h=dHints[dI]; let body="";
+    const labels=["提示 ①（只给方向）","提示 ②（具体到行）","看参考答案"];
+    for(let k=0;k<h;k++) body+=`<div>· ${q.hints[k]}</div>`;
+    if(h<3) body+=`<button class="btn sm ghost" onclick="dHint()">${labels[h]}</button>`;
+    ctl.innerHTML=(q.scoreB<5?`<div class="hintstep"><b style="color:var(--evidence-amber)">阶梯提示（每级都算一次"用了提示"，影响掌握度判定）</b>${body}</div>`:"")
+      +`<div style="margin-top:12px"><button class="btn" onclick="dNext()">${dI<DQ.length-1?"下一问 →":"进入终局：不看答案复述"}</button></div>`;
+  } else if(dPhase==="recall"){
+    chat.innerHTML=html;
+    ctl.innerHTML=`<div class="recall"><b>终局检验 · 关掉一切参考，把「添加任务」从点击到数据变化完整讲一遍</b>
+      <div class="mut" style="font-size:11.5px;margin:4px 0">这一步区分"记住了 AI 的讲解"和"真的会了"——是掌握判定的最后一关</div>
+      <textarea id="rText" placeholder="口述你的完整复述（可点下方 🎙 语音作答）…" style="min-height:80px"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn sm ghost" id="rMic" onclick="micToggle('rText')">🎙 语音作答</button>
+        <button class="btn" onclick="dPhase='done';renderDefend()">提交复述</button></div></div>`;
+  } else {
+    chat.innerHTML=html;
+    ctl.innerHTML=`<div class="recall" style="border-color:var(--pass-green)">
+      <b style="color:var(--pass-green)">复述合格 ✓</b>　独立完成、未用提示 → 已写入学习记录，「流程追踪」能力证据 +1<br>
+      <span class="mut" style="font-size:12px">本轮薄弱点：loading 防重复（练习中）· 空 catch 后果（未学）→ 已同步知识库与冲刺计划</span>
+      <div style="margin-top:10px"><button class="btn" onclick="alert('demo：换一组题型再来一轮')">再来一轮（换题型）</button>
+      <button class="btn ghost" onclick="go('#/radar')">查看能力雷达</button></div></div>`;
+  }
+}
+function submitAnswer(){ dPhase="scored"; renderDefend(); }
+function dHint(){ dHints[dI]++; renderDefend(); }
+function dNext(){ if(dI<DQ.length-1){ dI++; dPhase="ask"; } else { dPhase="recall"; } renderDefend(); }
+
+/* ───────── diff / 反向追踪 / 双闭环三档 ───────── */
+function diffModal(){
+  document.getElementById("mNo").textContent="DIFF";
+  document.getElementById("mTitle").textContent="ch-02 · TasksPage.tsx（隔离 worktree · 一键可回滚）";
+  document.getElementById("mBody").innerHTML=`<div class="diffbox">
+    <div class="col before"><h5>基线（改动前）</h5><pre>async function handleSubmit() {
+  setLoading(true);
+  try {
+    await fetch("/api/tasks", {...});
+  } finally {
+    setLoading(false);
+  }
+}</pre></div>
+    <div class="col after"><h5>你的修改（+1 行）</h5><pre>async function handleSubmit() {
+<span class="add">  if (loading) return;  // 防重复提交</span>
+  setLoading(true);
+  try {
+    await fetch("/api/tasks", {...});
+  } finally {
+    setLoading(false);
+  }
+}</pre></div></div>
+  <div class="notice"><span>验证：tsc 通过（类型层）· 行为层实测需授权 Auth-L2</span><button class="btn sm ghost" style="margin-left:auto" onclick="closeModal()">关闭</button></div>`;
+  document.getElementById("mask").classList.add("on");
+}
+function backModal(i){
+  const chain=FLOW[i].back;
+  document.getElementById("mNo").textContent="BACK-TRACE";
+  document.getElementById("mTitle").textContent="反向追踪 · 从数据写入点回到用户操作";
+  document.getElementById("mBody").innerHTML=`<div class="term-body">`+
+    chain.map((c,k)=>`<div style="padding:7px 0;border-bottom:1px dashed var(--grid)"><b class="mono" style="color:var(--evidence-amber)">${k===0?"❓":k===chain.length-1?"①":"↑"}</b> ${c}</div>`).join("")+
+    `</div><div class="notice"><span>任何状态写入点都可以反查"谁改的、谁触发的"——这是流程线的逆行模式。</span><button class="btn sm ghost" style="margin-left:auto" onclick="closeModal()">返回流程线</button></div>`;
+  document.getElementById("mask").classList.add("on");
+}
+const PK=[
+ `① 让 AI 先找到现有实现并说明调用链（必须引用文件:行）<br>② 再要最小改动方案——<b>明确要求"不要立即修改"</b><br>③ 一起定验收条件：连点 3 次仅 1 次请求、失败恢复、tsc 通过<br>④ 审查它给的 diff，逐行问"这一行为什么必要"<br>⑤ 运行验证后，<b>由你</b>向别人解释这次修改和结果`,
+ `① 先调查、再方案、再动手——顺序不能反<br>② 方案必须附带证据（file:line），否则退回<br>③ 验收条件你自己定，AI 只能补充<br>④ diff 逐行审，验证分层跑<br>⑤ 解释权在你，不在 AI`,
+ `（这一档没有脚本——<b>你</b>来提出任务、定验收条件、选验证方式，AI 只是评审搭档。<br>提示：回想 CH-02 你是怎么走完六查的。）`
+];
+function pkSet(l){
+  ["pk0","pk1","pk2"].forEach((id,i)=>document.getElementById(id).classList.toggle("on", i===l));
+  document.getElementById("pkBody").innerHTML=PK[l];
+}
+TERMS["状态"].cmp={a:"状态 state",b:"属性 props",rows:[
+ ["解决的问题","组件自己的临时记忆（会变）","父组件传下来的约定（只读）"],
+ ["数据来源","组件内部 useState","父组件 JSX 属性传入"],
+ ["修改位置","setXxx 由组件自己改","父组件改，子组件只能使用"],
+ ["易混点","以为改 props 会生效——不会","以为 state 跨组件可见——不会"]]};
+
+/* ───────── 代码库阅读器（只读 · 三层联动） ───────── */
+const CODE_FILES = {
+ "src/web/TasksPage.tsx":[
+ 'import { useState } from "react";','import { formatDate } from "../utils/format";','',
+ 'export default function TasksPage() {','  const [title, setTitle] = useState("");','  const [loading, setLoading] = useState(false);','',
+ '  async function handleSubmit() {','    setLoading(true);','    try {','      const res = await fetch("/api/tasks", {','        method: "POST",','        headers: { "Content-Type": "application/json" },','        body: JSON.stringify({ title }),','      });','      const data = await res.json();','      console.log("created", data);','      setTitle("");','    } catch (e) {','      // 网络错误暂时忽略','    } finally {','      setLoading(false);','    }','  }','',
+ '  return (','    <div>','      <h1>任务列表 · {formatDate(new Date())}</h1>','      {/* TODO: 接入真实列表接口 */}','      <button onClick={handleSubmit} disabled={loading}>','        添加任务','      </button>','    </div>','  );','}'],
+ "src/server/index.ts":[
+ 'import express from "express";','','const app = express();','app.use(express.json());','',
+ '// GET /api/tasks 返回全部任务','app.get("/api/tasks", (_req, res) => {','  res.json({ tasks: [] });','});','',
+ '// POST /api/tasks 创建新任务','app.post("/api/tasks", (req, res) => {','  const title = req.body?.title;','  if (!title) {','    res.status(400).json({ error: "title required" });','    return;','  }','  res.status(201).json({ id: 1, title, done: false });','});','',
+ '// PATCH /api/tasks/:id 更新完成状态','app.patch("/api/tasks/:id", (req, res) => {','  res.json({ id: Number(req.params.id), done: Boolean(req.body?.done) });','});','','app.listen(3000);'],
+ "src/db/schema.sql":[
+ 'CREATE TABLE tasks (','  id INTEGER PRIMARY KEY AUTOINCREMENT,','  title TEXT NOT NULL,','  done INTEGER NOT NULL DEFAULT 0,','  created_at TEXT NOT NULL DEFAULT (datetime(\'now\'))',');'],
+ "src/utils/format.ts":[
+ 'export function formatDate(d: Date): string {','  const y = d.getFullYear();','  const m = String(d.getMonth() + 1).padStart(2, "0");','  const day = String(d.getDate()).padStart(2, "0");','  return `${y}-${m}-${day}`;','}'],
+ "package.json":['{','  "name": "todo-clip",','  "version": "1.0.0",','  "private": true,','  "dependencies": {','    "express": "^4.19.2"','  }','}'],
+ "README.md":['# todo-clip','','一个极小的任务管理示例（Express + React）。','','## 已知遗留','','- TODO: 接入真实列表接口'],
+};
+const EV_MARKS = {"src/web/TasksPage.tsx":{5:"状态定义 title / loading",6:"状态定义 loading",8:"handleSubmit 入口",9:"置位 loading（防重复提交）",17:"空 catch（体检疑似项）",22:"finally 恢复 loading",30:"按钮 onClick 触发提交"},"src/server/index.ts":{12:"GET /api/tasks 路由注册",17:"POST 校验分支（400）",20:"返回 201 Created"},"src/db/schema.sql":{1:"tasks 表定义（表存在≠被使用）"}};
+const OUTL = {
+ "src/web/TasksPage.tsx":[["class","TasksPage",4],["method","handleSubmit",8],["fn","JSX 渲染块",26]],
+ "src/server/index.ts":[["route","GET /api/tasks",12],["route","POST /api/tasks",17],["route","PATCH /:id",24]],
+ "src/utils/format.ts":[["fn","formatDate",1]],
+ "src/db/schema.sql":[["table","tasks",1]],
+ "package.json":[["cfg","dependencies.express",5]],
+};
+const CALLS = {
+ "src/web/TasksPage.tsx":{sel:"handleSubmit（:8）",callers:[["src/web/TasksPage.tsx:30","onClick（JSX 事件）"]],callee:[["POST /api/tasks","src/server/index.ts:17"]]},
+ "src/server/index.ts":{sel:"POST /api/tasks（:17）",callers:[["src/web/TasksPage.tsx:11","fetch 调用"]],callee:[["持久层写入","无证据 → 开放问题"]]},
+ "src/utils/format.ts":{sel:"formatDate（:1）",callers:[["src/web/TasksPage.tsx:28","JSX 插值"]],callee:[["Date 原生方法","—"]]},
+};
+let cFile="src/web/TasksPage.tsx", cLine=0, cNote="", cToastT=null;
+function hl(line){
+  const s = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return s.replace(/(\/\/.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(const|let|var|function|return|import|export|default|async|await|if|else|try|catch|finally|new|class|from|interface|CREATE|TABLE|PRIMARY|KEY|NOT|NULL|DEFAULT|INTEGER|TEXT)\b|\b(\d+)\b/g,
+    (m,c,st,kw,num)=>{
+      if(c) return `<span style="color:#6A7FA8">${m}</span>`;
+      if(st) return `<span style="color:#7ED09A">${m}</span>`;
+      if(kw) return `<span style="color:#C792EA">${m}</span>`;
+      if(num) return `<span style="color:#E8B45A">${m}</span>`;
+      return m;
+    });
+}
+function codeTreeRender(){
+  const groups={};
+  Object.keys(CODE_FILES).forEach(f=>{ const d=f.includes("/")?f.slice(0,f.lastIndexOf("/")):"·"; (groups[d]=groups[d]||[]).push(f); });
+  let html=`<div class="hd"><span class="file-no">FILES</span><b>todo-clip · 6 文件</b></div><div class="bd ctree">`;
+  Object.keys(groups).sort().forEach(d=>{
+    if(d!=="·") html+=`<div class="crow cdir"><span class="ic">▾</span>${d}/</div>`;
+    groups[d].forEach(f=>{
+      const nm=d==="·"?f:f.slice(d.length+1);
+      html+=`<div class="crow ${f===cFile?"on":""}" style="${d!=="·"?"padding-left:26px":""}" onclick="codeOpen('${f}')"><span class="ic">${f.endsWith(".sql")?"🗄":f.endsWith(".json")?"📦":f.endsWith(".md")?"📄":"📜"}</span>${nm}</div>`;
+    });
+  });
+  document.getElementById("codeTree").innerHTML=html+"</div>";
+}
+function codeOpen(f, line){
+  if(!CODE_FILES[f]) f = "src/web/TasksPage.tsx";
+  cFile=f; cLine=line||0;
+  document.getElementById("codePath").textContent=f;
+  codeTreeRender();
+  const marks=EV_MARKS[f]||{};
+  const area=document.getElementById("codeArea");
+  area.innerHTML=CODE_FILES[f].map((l,i)=>{
+    const ln=i+1, isEv=marks[ln], cur=ln===cLine;
+    return `<div class="cl ${isEv?"ev":""} ${cur?"cur":""}" ${isEv?`title="证据：${marks[ln]} · 点击查看" onclick="evLineModal('${f}',${ln})"`:""}><span class="ln">${ln}</span><span>${isEv?"● ":""}${hl(l)}</span></div>`;
+  }).join("");
+  const ol=OUTL[f]||[];
+  document.getElementById("codeOutline").innerHTML=ol.length?ol.map(o=>`<div class="orow" onclick="codeOpen('${f}',${o[2]})"><span><span class="k">${o[0]}</span> ${o[1]}</span><span class="mut mono" style="font-size:10px">:${o[2]}</span></div>`).join(""):`<div class="mut" style="padding:6px 10px">该文件无已识别符号</div>`;
+  const c=CALLS[f];
+  document.getElementById("codeCalls").innerHTML=c?`
+    <div style="margin-bottom:8px"><b class="mono" style="color:var(--evidence-amber)">${c.sel}</b></div>
+    <div style="font-weight:600;margin-bottom:4px">被谁调用</div>${c.callers.map(x=>`<div class="cr" onclick="codeJump('${x[0]}','跳转自「${c.sel}」的调用者')"><div class="pth">↖ ${x[0]}</div><div class="why">${x[1]}</div></div>`).join("")}
+    <div style="font-weight:600;margin:10px 0 4px">它调用</div>${c.callee.map(x=>`<div class="cr" onclick="${x[1]&&x[1].includes(".ts")?`codeJump('${x[1]}','跳转自「${c.sel}」的调用目标')`:""}"><div class="pth">↘ ${x[1]!=="—"?x[1]:x[0]}</div><div class="why">${x[1]!=="—"?x[0]:"（无下游证据）"}</div></div>`).join("")}
+    <div class="mut" style="font-size:10.5px;margin-top:10px;line-height:1.7">来自整库引用图（L2）· 静态关系 ≠ 运行时一定执行</div>`
+    :`<div class="mut">当前文件暂无引用图数据（正式版由整库引用图自动生成）</div>`;
+  const at=document.getElementById("codeAt");
+  at.textContent = cLine ? ` · 第 ${cLine} 行` : "";
+  if(cLine){
+    const el=area.querySelector(".cl.cur");
+    if(el){ el.classList.add("pulse"); el.scrollIntoView({block:"center"}); }
+  }
+  const toast=document.getElementById("cToast");
+  if(cNote){
+    toast.innerHTML=`<span class="dot"></span>已定位 <b class="mono">${f}:${cLine}</b>　·　${cNote}`;
+    toast.style.display="block";
+    clearTimeout(cToastT); cToastT=setTimeout(()=>toast.style.display="none", 5000);
+    cNote="";
+  } else toast.style.display="none";
+}
+function evLineModal(f,ln){
+  const what=(EV_MARKS[f]||{})[ln]||"";
+  // 证据 → 流程线站点映射：让"在流程线中查看"名副其实
+  const stMap = {"src/web/TasksPage.tsx":1,"src/server/index.ts":2,"src/db/schema.sql":3};
+  const st = stMap[f];
+  document.getElementById("mNo").textContent="EVIDENCE";
+  document.getElementById("mTitle").textContent=`证据 · ${f}:${ln}`;
+  document.getElementById("mBody").innerHTML=`<div style="margin:6px 0"><span class="badge b-src">源码事实</span> <span class="badge b-infer">processing：已关联</span> <span class="badge b-none">未运行验证</span></div><div class="term-body"><b>${what}</b><br>该行被 2 条结论引用；断言范围仅限本行所示行为。</div><div class="notice"><span>完整证据卡会写明"尚未证明的部分"。</span>${st!==undefined?`<button class="btn sm" style="margin-left:auto" onclick="closeModal();go('#/flow');showStation(${st})">在流程线第 ${["","①","②","③","④","⑤"][st+1]}站中查看 →</button>`:""}</div>`;
+  document.getElementById("mask").classList.add("on");
+}
+function codeJump(loc, note){
+  cNote = note || "";
+  const m=String(loc).match(/^(.*?\.(?:tsx?|sql|json|md)):(\d+)/);
+  if(!m){ go("#/code"); return; }
+  go("#/code?f="+encodeURIComponent(m[1])+"&l="+m[2]);
+}
+
+/* ───────── 服务商预设：免费额度优先，付费 API 保底 ───────── */
+const LPRESETS=[
+ {n:"智谱 GLM-4-Flash",tag:"官方免费",b:"https://open.bigmodel.cn/api/paas/v4",m:"glm-4-flash",local:false},
+ {n:"硅基流动",tag:"含免费小模型",b:"https://api.siliconflow.cn/v1",m:"Qwen/Qwen2.5-7B-Instruct",local:false},
+ {n:"OpenRouter",tag:":free 系列",b:"https://openrouter.ai/api/v1",m:"模型名+:free",local:false},
+ {n:"Ollama 本地",tag:"免费·离线",b:"http://127.0.0.1:11434/v1",m:"qwen2.5:7b",local:true},
+ {n:"自定义付费 API",tag:"保底",b:"",m:"",local:false},
+];
+function presetRender(){
+  document.getElementById("presetRow").innerHTML = LPRESETS.map((p,i)=>
+    `<span class="tchip" onclick="lpSet(${i})">${p.n} <b style="color:var(--evidence-amber);font-weight:600">· ${p.tag}</b></span>`).join("");
+}
+function lpSet(i){
+  const p=LPRESETS[i];
+  if(p.b) document.getElementById("stBase").value=p.b;
+  if(p.m) document.getElementById("stModel").value=p.m;
+  if(p.local) document.getElementById("stLocal").checked=true;
+}
+
+/* ───────── 语音作答：①原生 Web Speech ②file:// 降级为模拟转写（正式版离线层用 whisper.wasm/@remotion/whisper-web） ───────── */
+let rec=null, recOn=false;
+function micToggle(tid){
+  if(recOn && rec){ rec.stop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ demoType(tid); return; }
+  try{
+    rec = new SR(); rec.lang="zh-CN"; rec.interimResults=true; rec.continuous=true;
+    let base = document.getElementById(tid).value || "";
+    rec.onresult = e=>{
+      let fin="", inter="";
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        const t=e.results[i][0].transcript;
+        if(e.results[i].isFinal) fin+=t; else inter+=t;
+      }
+      if(fin) base += fin;
+      document.getElementById(tid).value = base + inter;
+    };
+    rec.onerror = ev=>{
+      micStopUI();
+      alert("语音识别不可用（"+ev.error+"）：直接双击 file:// 打开时浏览器会拦截麦克风。\n正式应用跑在 localhost 天然可用；此处已切「模拟转写」演示交互，正式版离线层用 whisper.wasm（无需任何 API）。");
+      demoType(tid);
+    };
+    rec.onend = ()=>micStopUI();
+    rec.start(); recOn=true;
+    micBtnUI("⏺ 停止录音", true);
+  }catch(e){ demoType(tid); }
+}
+function micStop(){ if(rec){ try{rec.stop();}catch(_){/* 已停止 */} rec=null; } micStopUI(); }
+function micStopUI(){
+  recOn=false;
+  ["dMic","rMic"].forEach(id=>{ const b=document.getElementById(id); if(b){ b.classList.remove("rec"); b.textContent="🎙 语音作答"; } });
+}
+function micBtnUI(t,on){ ["dMic","rMic"].forEach(id=>{ const b=document.getElementById(id); if(b){ b.textContent=t; b.classList.toggle("rec",on); } }); }
+function demoType(tid){
+  micStopUI();
+  const el=document.getElementById(tid); if(!el) return;
+  const text="点击添加任务按钮后，handleSubmit 把 loading 置为 true 防止重复提交，然后 fetch POST /api/tasks，finally 里恢复 loading。（模拟转写预览）";
+  el.value=""; let i=0;
+  const t=setInterval(()=>{ el.value=text.slice(0,++i); if(i>=text.length) clearInterval(t); },40);
+}
+
+render();
+</script>
+</body>
+</html>

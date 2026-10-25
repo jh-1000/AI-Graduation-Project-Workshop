@@ -1,0 +1,24 @@
+{
+  "fileCount": 6,
+  "files": [
+    "README.md",
+    "package.json",
+    "src/db/schema.sql",
+    "src/server/index.ts",
+    "src/utils/format.ts",
+    "src/web/TasksPage.tsx"
+  ],
+  "endpoints": ["GET /api/tasks", "POST /api/tasks", "PATCH /api/tasks/:id"],
+  "symbols": ["formatDate", "TasksPage", "handleSubmit"],
+  "stackContains": ["express", "javascript"],
+  "flow": {
+    "name": "添加任务",
+    "steps": [
+      { "step": "点击「添加任务」按钮", "evidence": "src/web/TasksPage.tsx:31" },
+      { "step": "handleSubmit 发起请求", "evidence": "src/web/TasksPage.tsx:9" },
+      { "step": "POST /api/tasks", "evidence": "src/server/index.ts:12" },
+      { "step": "写入 tasks 表", "evidence": "src/db/schema.sql:1" },
+      { "step": "返回创建结果", "evidence": "src/server/index.ts:20" }
+    ]
+  }
+}

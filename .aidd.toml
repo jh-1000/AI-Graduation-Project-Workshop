@@ -1,0 +1,9 @@
+
+[capture]
+ignore_paths = [
+  ".env",
+  ".env.*",
+  "**/secrets/**",
+  "**/*credential*",
+  "**/id_rsa*",
+]

@@ -1,0 +1,41 @@
+{
+  "name": "proj-analysis-learner",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4321",
+    "build": "next build",
+    "start": "next start -p 4321",
+    "worker": "tsx worker/worker.ts",
+    "typecheck": "tsc --noEmit",
+    "regression": "tsx scripts/regression.ts",
+    "verify": "tsx scripts/verify/run-all.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.78",
+    "adm-zip": "^0.6.1",
+    "ai": "^7.0.153",
+    "better-sqlite3": "^13.0.3",
+    "next": "^15.5.28",
+    "openai": "^7.43.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "shiki": "^4.5.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "ts-fsrs": "^5.4.2",
+    "ts-morph": "^28.0.0",
+    "web-tree-sitter": "^0.22.6",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/adm-zip": "^0.5.8",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
