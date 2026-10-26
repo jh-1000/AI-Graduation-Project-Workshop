@@ -27,6 +27,7 @@ date: 2026-10-25
 | [[04-Dev-Tasks/]] | Development task list |
 | [[05-Test-Tasks/]] | FE/BE acceptance plans, test assets, and execution records |
 | [[06-发布/]] | Release records (REL) |
+| [[06-发布/REL-2026-10-26-be-test]] | REL — be-test 批次（16 passed，闭环 fe-test 批次记为未做的 BE-TEST） |
 | [[archive/]] | Superseded / swept pages |
 | `raw/` | Source materials (read-only) |
 | `output/` | Session outputs and reports |

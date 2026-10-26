@@ -69,3 +69,7 @@
 ## [2026-10-26 00:29:39] fe-test | create | 前端验收执行完成（FE-TEST-p1-loop）：安装 @playwright/test@1.61.0（复用本机 chromium-1228 缓存，未下载浏览器），新增 playwright.config.ts 与 e2e/p1-loop.spec.ts（6 用例 S1–S5、S7）；跑测 6 passed（14.4s），负向对照把 S3 末步断言改为 src/server/index.ts:999 得 1 failed 后改回复跑 6 passed；FE-PW-PLAN-p1-loop 状态转「已执行」，05-Test-Tasks 索引与 Evidence 同步
 
 ## [2026-10-26 01:25:25] commit | create | 发布记录 REL-2026-10-26：fe-test 执行批次（Playwright 6/6 + 负向对照 + @playwright/test 依赖 + npm test + FE-PW-PLAN 转已执行 + FE-TEST-p1-loop 入库）；BE-TEST 未做按闸门记录原因与风险
+
+## [2026-10-26 13:34:28] be-test | create | 后端接口验收完成（BE-TEST-p1-api）：新增 e2e/api/p1-api.spec.ts（16 用例，@playwright/test 的 request 上下文做真实 HTTP，无 Mock、未新增依赖），16 passed（3.6s）；两负向对照各得 1 failed（证据行号 7→8 报「证据缺失：src/server/index.ts:8」、temperature 0.2→0.9 报 Expected 0.9 / Received 0.2）；首轮 15 passed / 1 failed 属 A 类测试脚本缺陷（API-14 用假路径撞 ENOENT 而非 slug 冲突），修法为改用 process.cwd() 并另加「realpath 先于 slug 唯一性」顺序契约断言；落库 BE-API-PLAN-p1-api 与 BE-TEST-p1-api，给 BE-evidence 补「待测清单」B1–B8，05-Test-Tasks 索引与 Evidence 同步；记录缺口：无 api/API.md、analyze/zip 成功路径与 LLM 有数据形态未自动化
+
+## [2026-10-26 23:07:26] commit | create | 发布记录 REL-2026-10-26-be-test：be-test 执行批次（16 passed / 3.6s + 两负向对照各 1 failed + 全量套件 22 passed），闭环 fe-test 批次记为未做的 BE-TEST；修正 REL-2026-10-26 的过期陈述与 05-Test-Tasks/BE-TEST-p1-api 中指向已清理临时文件的失效路径；.gitignore 增 %SystemDrive%/
