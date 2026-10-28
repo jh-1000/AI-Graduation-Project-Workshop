@@ -73,3 +73,32 @@
 ## [2026-10-26 13:34:28] be-test | create | 后端接口验收完成（BE-TEST-p1-api）：新增 e2e/api/p1-api.spec.ts（16 用例，@playwright/test 的 request 上下文做真实 HTTP，无 Mock、未新增依赖），16 passed（3.6s）；两负向对照各得 1 failed（证据行号 7→8 报「证据缺失：src/server/index.ts:8」、temperature 0.2→0.9 报 Expected 0.9 / Received 0.2）；首轮 15 passed / 1 failed 属 A 类测试脚本缺陷（API-14 用假路径撞 ENOENT 而非 slug 冲突），修法为改用 process.cwd() 并另加「realpath 先于 slug 唯一性」顺序契约断言；落库 BE-API-PLAN-p1-api 与 BE-TEST-p1-api，给 BE-evidence 补「待测清单」B1–B8，05-Test-Tasks 索引与 Evidence 同步；记录缺口：无 api/API.md、analyze/zip 成功路径与 LLM 有数据形态未自动化
 
 ## [2026-10-26 23:07:26] commit | create | 发布记录 REL-2026-10-26-be-test：be-test 执行批次（16 passed / 3.6s + 两负向对照各 1 failed + 全量套件 22 passed），闭环 fe-test 批次记为未做的 BE-TEST；修正 REL-2026-10-26 的过期陈述与 05-Test-Tasks/BE-TEST-p1-api 中指向已清理临时文件的失效路径；.gitignore 增 %SystemDrive%/
+
+## [2026-10-27 00:00:11] be-dev | create | 结论层写入者落地（BE-claims）：新增 src/lib/claims.ts（persistClaims 按版本整体替换，流程结论 derivation=inferred / review_state 由每步是否对上证据行确定，未覆盖端点结论 derivation=direct_extraction / supported），worker 两条链各加 claims 阶段（scan 末位、map 在 flows 之后），新增只读端点 /api/projects/[id]/claims 与项目页「结论层」区块，deleteProjectData 补删 claim_evidence / claim_dependencies；regression 增结论层与幂等断言、e2e 增 API-17 与 S8；24 passed，两次负向对照各得 1 failed；新建 Decision-Register D-4（claim_dependencies 未写入），D-1 后半仍缺 symbols↔evidence 连接键
+
+## [2026-10-27 13:11:50] fe-dev | update | 按 demo 重建前端 IA：11 页迁入 /project/[id]/（消除硬编码 project 44）、项目侧栏+专注模式；新增 graph/mastery/file/fable/defend API；图谱 2D/3D 力导向、流程线四动作+反追踪、知识点十段+寓言卡、知识库双视图+FSRS 复习、答辩双轴评分+阶梯提示+复述终局、挑战定位校验；flows 增加 version 过滤；移除未使用的 AI SDK 依赖；T1-T6 6/6、回归 PASS、Playwright 27/27
+
+## [2026-10-27 23:20:36] be-dev | create | P2 落地：token 计量+预算上限（超限降级开放问题）、/api/stats 统计与清缓存、变更影响页（失效传播 UI，按最新版本统计）、体检与演进页（体检+git 时间线）、flows version 过滤；失效传播端到端实测（1 文件变更→3 证据失效→3 结论 flagged→1 开放问题）；E2E 27/27、T 6/6、回归 PASS
+
+## [2026-10-28 07:41:43] commit | create | 全功能收官：P3 练习闭环/任务书/混淆卡/助手/语音 + P4 改码双轨/破坏实验/运行验证/冲刺 + P5 失效视图/双导出/多语言；D-1 关闭、D-7 登记；README 重写；全量验证通过
+
+## [2026-10-28 07:47:34] commit | create | 全功能收官：14 屏 / 30+ API / 28 表 / T 6/6 + 回归 PASS + E2E 27/27 + build ✓。项目完成。
+
+## [2026-10-28 08:32:28] fix | update | 修复导入噪音：NOISE_DIRS 补 .npm-cache/data/aidd-wiki 等 14 项；NOISE_EXTS 过滤二进制/日志；%SystemDrive% 残留过滤；浏览 API per-entry 容错；项目删除按钮 + DELETE API
+## [2026-10-28 10:30:20] commit | P2–P5/噪音修复 REL 入库；Decision-Register 同步 D-1/D-2/D-3/D-4–D-7/U-1 并新增 D-8 与 Closed 节
+
+## [2026-10-29 00:47:02] fe-dev | create | 追问链升级：defend API 新增 followup action（LLM 基于回答缺口+证据动态生成追问）；UI 双轴评分后可触发追问链（表层→原理→边界，最多 3 层），每层追问独立评分，链深度可追踪
+
+## [2026-10-29 01:02:36] fix | update | 修复 KB 页被意外覆盖为雷达页：完整重写知识库页（三视图/复习队列/术语弹层/混淆对比卡全部恢复）
+
+## [2026-10-29 01:09:02] fe-dev | create | 6 项学习升级全部落地：①技术栈路径深化(KB techpath视图) ②影响探针(probe API+知识点页) ③换一种写法对比器(alternatives API+知识点页) ④追问链(已完成) ⑤代码变体复习卡(复习卡加代码位置提示+证据锚点) ⑥技术栈雷达(雷达页按依赖维度)。E2E 27/27
+
+## [2026-10-29 01:17:08] be-dev | update | 六维覆盖报告修复：coverage.ts symbols 维 SQL 括号 + external_deps 读 stage='lockfile' 真实数据 + flows 维排除依赖行；claims.ts dep 行不再生成「未进入业务流」结论；MAP_STAGES 补 scan/lockfile（文件解析恒 0/117 的根因）；map 页阶段列表补两项并修 module key 错位；typecheck ✓、真实库注入验证 ✓（临时数据已清理）、regression PASS
+
+## [2026-10-29 01:17:09] commit | create | wiki 补齐批次：REL-2026-10-29-learning-upgrades 入库（含 10-29 三条批次 + 六维修复批）；新建 04-Dev-Tasks/FE-learning-upgrades 与 BE-coverage-report、03-Code/modules/learning/BE-learning-upgrades；同步 03-Code/04/05 README 索引、index.md、Decision-Register D-3 状态更新（读取方切 stage，维持部分缓解）
+
+## [2026-10-29 07:46:30] commit | create | 代码批次提交 c253fe9（88 文件 +8748/−1047）：P2–P5 + 追问链与学习升级 + 两修复批按 REL 合并为单 feat 提交（文件级交叠不可拆）；migrations 0003–0007 首次入库
+
+## [2026-10-29 07:46:31] commit | create | REL-2026-10-28 / REL-2026-10-29 转 done 并回填 c253fe9；index REL 行同步；sessions/2026-10-29 入库；本 docs 提交（见下一哈希）收尾全部 wiki 改动
+
+## [2026-10-29 07:46:32] session | create | 会话摘要 2026-10-29：当日 7 条 log、无 open handoff、工作树清空；下一步=推送授权 + 重跑 map 验证新覆盖口径

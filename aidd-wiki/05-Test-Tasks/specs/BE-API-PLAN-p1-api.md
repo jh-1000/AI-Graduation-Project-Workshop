@@ -114,6 +114,7 @@ id 在用例中**按 slug 动态解析**（`beforeAll` → `GET /api/projects`�
 | API-14 | 缺 name / 缺 path / slug 冲突 → 400 | **是** | 是 |
 | API-15 | 路径不存在 → 400 且不落库 | **是** | 是 |
 | API-16 | analyze 项目不存在 → 404 | **是** | 是 |
+| API-17 | 结论层 claims：derivation / review_state / 支撑证据可回溯 | **是** | 是 |
 
 ## 关键断言（优先证明业务状态）
 
@@ -122,6 +123,7 @@ id 在用例中**按 slug 动态解析**（`beforeAll` → `GET /api/projects`�
 3. **版本过滤不得回落**：`?version=ghost-v0` 必须返回空集，绝不能回落到 `scan-v1`（这是 D-2「证据跨版本堆积」的防线）。
 4. **设置接口绝不回明文密钥**：响应不得出现 `apiKey` / `llm_api_key` 字段。
 5. **失败分支不留副作用**：400/404 之后项目清单与设置快照必须与调用前全等。
+6. **结论层的 review_state 必须与支撑情况一致**：流程结论的每一步都要能在 `supports` 里找到对应 `file_path:start_line`，否则应为 `draft`；端点结论恒为 `supported` 且 `derivation=direct_extraction`。断言 `review_state` 集合（当前 `["draft","draft","supported"]`），只断言「返回 3 条」会让「全标 supported」不被发现。
 
 ## 不允许弱化的断言
 
@@ -133,6 +135,7 @@ id 在用例中**按 slug 动态解析**（`beforeAll` → `GET /api/projects`�
 | A4 | API-08 的幽灵版本必须空集 | 若允许回落，跨版本证据会静默串台，且不会有任何报错 |
 | A5 | API-15 的「不留项目行」 | 「写库前校验」是产品纪律；只断言 400 无法发现「先插入后回滚」的实现 |
 | A6 | API-14 的 realpath 先于 slug 唯一性的**顺序契约** | 顺序决定报错语义与副作用；顺序反了会让「已存在 slug」的请求在无授权路径上先被拒，掩盖真实授权行为 |
+| A7 | API-17 的 `review_state` 分布（draft×2 + supported×1）与每条 `supports[].start_line > 0` | 这是「结论不得冒充已验证」这条产品不变量（`_slots/project-invariants.md:19` + 七不等式）在接口层的落点；放宽成「返回 3 条结论」等于允许 draft 被当成 supported 交付 |
 
 ## 人工检查项
 
@@ -141,12 +144,12 @@ id 在用例中**按 slug 动态解析**（`beforeAll` → `GET /api/projects`�
 | M1 | `analyze` 成功路径（派生 worker、写 `analysis_runs`、状态流转到 `completed`） | 会起子进程并真实写库，不适合放进验收套件；由 `npm run regression` / `scripts/verify/c-loop.ts` 覆盖 |
 | M2 | zip 导入成功路径（中文条目名） | 需构造 zip；已由 `scripts/verify/t6-zip.ts` 覆盖 |
 | M3 | LLM 端点的有数据形态 | `settings` 0 行，无法构造；需人工填 Key 后走查 |
-| M4 | 5 个只读端点对**不存在项目**返回 200 空结构（而非 404） | 见「验收缺口」第 1 条；当前是既有行为，未在本轮改变 |
+| M4 | 6 个只读端点对**不存在项目**返回 200 空结构（而非 404） | 见「验收缺口」第 1 条；当前是既有行为，未在本轮改变 |
 
 ## 契约建议（不改代码，仅记录）
 
-- 5 个只读端点（`evidence` / `flows` / `nodes` / `terms` / `practice`）对不存在的项目返回 **200 + 空结构**，而 `projects/[id]`、`preview`、`analyze` 返回 **404**。语义不一致，但前端 `load()` 已按「非 ok 回退空对象」兜底，故不构成缺陷。若统一为 404，需同步改 `src/app/project/[id]/page.tsx:146-152`。
-- `terms` 端点**不按版本过滤**（`terms` 以 `(project_id, slug)` 唯一、跨版本 upsert），与其余 4 个端点的版本口径不同。这是设计选择（见 [[04-Dev-Tasks/FE-p1-loop\|FE-p1-loop]] 关键设计 6），已在本计划中显式记录以免被误判为缺陷。
+- 6 个只读端点（`evidence` / `claims` / `flows` / `nodes` / `terms` / `practice`）对不存在的项目返回 **200 + 空结构**，而 `projects/[id]`、`preview`、`analyze` 返回 **404**。语义不一致，但前端 `load()` 已按「非 ok 回退空对象」兜底，故不构成缺陷。若统一为 404，需同步改 `src/app/project/[id]/page.tsx:146-152`。
+- `terms` 端点**不按版本过滤**（`terms` 以 `(project_id, slug)` 唯一、跨版本 upsert），与其余 5 个端点的版本口径不同。这是设计选择（见 [[04-Dev-Tasks/FE-p1-loop\|FE-p1-loop]] 关键设计 6），已在本计划中显式记录以免被误判为缺陷。
 
 ## 验收缺口
 

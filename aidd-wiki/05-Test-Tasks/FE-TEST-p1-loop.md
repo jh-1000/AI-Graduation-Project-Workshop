@@ -100,6 +100,14 @@ Playwright HTML 报告：本轮以 list reporter 输出为准，`playwright-repo
 - **实机只覆盖 fixture1 单项目**：大仓库（1385 文件）、窄屏、5 个只读端点各自的失败态均未覆盖。
 - `map-pipeline/SPEC.md` 只有 AC-1（缓存成本），没有覆盖五区块可见性的 AC —— 已记入计划「验收缺口」节，未自行新增 SPEC。
 
+## 后续批次补充（claims 结论层，2026-10-27）
+
+本记录描述的是 fe-test 批次当时的执行事实（**6 passed**）。后续 claims 结论层批次新增了 **S8**（结论层渲染与 supported/draft 不混同），用例数变为 **7**，全量套件（FE 7 + BE 17）为 **24 passed**。
+
+- S8 断言：`section(page, /^结论层/)` 内 heading 含 `1 条 supported` 与 `2 条 draft`、`ul > li` 恰 3 条；流程结论条目含 `draft` / `inferred` / `src/server/index.ts:12`；端点结论条目含 `supported` / `direct_extraction` / `src/server/index.ts:7`。
+- 负向对照（对照 A：把 `src/lib/claims.ts` 的 review_state 判定改成无条件 `supported`）→ `--grep S8` 得 1 failed，报错原文 `unexpected value "结论层3 条 supported · 0 条 draft（draft = 结论未被证据完整支撑）"` / `Expected substring: "1 条 supported"`。
+- 本批次的执行细节与库内终态见 [[04-Dev-Tasks/BE-claims\|BE-claims]]。
+
 ## 下一步
 
 1. 用户到设置页填 API Key → 重跑 map → 补 S6 与三区块有数据路径的断言。

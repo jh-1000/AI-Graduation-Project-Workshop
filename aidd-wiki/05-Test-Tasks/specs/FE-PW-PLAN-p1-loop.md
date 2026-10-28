@@ -119,6 +119,7 @@ engine: @playwright/test (npm) 1.61.0
 | S5 | 错误态：不存在的项目 | 打开 `/project/999999` | 页面出现 `项目 999999 不存在或已被删除`；**不得**出现 `Application error: a client-side exception has occurred`；不出现 `加载中…` 常驻 | 是 |
 | S6 | 揭示交互（自测题 / 定位挑战） | 需要 `practice_items` 有数据（当前 0 行，需 API Key） | 点击 `查看答案` 前答案不可见、点击后可见且按钮变 `收起答案`；`揭示位置` 同理（`target_file:target_line`） | 否（缺数据源，见「人工检查项」） |
 | S7 | 版本过滤一致性 | 同上 | `GET /api/projects/37/evidence?version=scan-v1` 与不带 `version` 返回的 `analysisVersion` 均为 `scan-v1`，`evidence`/`symbols` 各 3 条；页面副标题版本号与该端点一致 | 部分（API 断言可自动化，页面一致性靠 S2 间接覆盖） |
+| S8 | 结论层渲染与 supported/draft 不混同 | 同上（`claims=3`） | 标题 `结论层`；副标题含 `1 条 supported` 与 `2 条 draft`；`ul > li` 恰 3 条；流程结论条目含 `draft` / `inferred` / `src/server/index.ts:12`；端点结论条目含 `supported` / `direct_extraction` / `src/server/index.ts:7` | 是 |
 
 ## 关键断言（优先证明业务状态，而非证明元素存在）
 
@@ -128,6 +129,7 @@ engine: @playwright/test (npm) 1.61.0
 4. **空态断言必须含「为什么空」**：`知识节点（0）` 区块内必须出现 `API Key` 字样，只断言「暂无数据」会掩盖降级路径失效。
 5. **错误态断言 `fatal` 文案且断言无 `Application error`**：这是 2026-10-25 实机走查中真实出现过的崩溃（`load()` 未检查 `res.ok`），断言必须能复现该回归。
 6. **页头三总状态不可省略**：断言 `初步清单 · 不代表完整分析` 常驻，防止 UI 把「代表性文件分析完成」冒充成「整库分析完成」（项目 Must-not-③）。
+7. **结论层的 supported 与 draft 必须被区分**：副标题里的 supported 数与 draft 数要与库内 `claims.review_state` 分布一致（当前 1 / 2）。只断言「页面上有 3 条结论」无法发现「所有结论都被标成 supported」这类把 draft 冒充成已验证的退化（对照 A 即此形态）。
 
 ## 不允许弱化的断言
 
@@ -137,6 +139,7 @@ engine: @playwright/test (npm) 1.61.0
 - A4：S4 的四个空态文案各自的关键短语（`API Key` / `需模型生成` / `尚无自测题：需模型生成。` / `尚无定位挑战：需模型生成。`）。不允许统一改成「暂无数据」。
 - A5：S5 必须断言 `项目 999999 不存在或已被删除` 且断言页面**不含** `Application error`。不允许只断言「页面不白屏」。
 - A6：S1 的 `初步清单 · 不代表完整分析` 必须出现在首屏。不允许移出断言集。
+- A7：S8 的 `1 条 supported` 与 `2 条 draft` 两个计数必须同时断言。不允许只断言「结论层有内容」或把两个计数合并成「3 条结论」——合并后 supported/draft 混同不会被发现。
 
 ## 人工检查项
 
@@ -151,16 +154,17 @@ engine: @playwright/test (npm) 1.61.0
 
 | 目标 | 建议定位方式（现状可用的） | 代码锚点 |
 | --- | --- | --- |
-| 页头标题 | `getByRole('heading', { name: '项目分析', level: 1 })` | `page.tsx:204` |
-| 三总状态徽标 | `getByText('初步清单 · 不代表完整分析')` | `page.tsx:206` |
-| 证据卡区块 | `getByRole('heading', { name: /^证据卡/ })`，再用其父 `section` 限定范围 | `page.tsx:304` |
-| 业务流程区块 | `getByRole('heading', { name: /^业务流程（/ })` | `page.tsx:347-348` |
-| 知识节点 / 术语卡片 / 自测题 / 定位挑战 | 同理按 `h2` 文本前缀定位 | `page.tsx:383` / `:415` / `:444` / `:468` |
-| 启动按钮 | `getByRole('button', { name: '启动完整分析（map）' })` | `page.tsx:244-248` |
-| 揭示按钮 | `getByRole('button', { name: '查看答案' })` / `{ name: '揭示位置' }` | `page.tsx:455-459` / `:478-482` |
-| 错误态文案 | `getByText('项目 999999 不存在或已被删除')` | `page.tsx:139` + `:191` |
+| 页头标题 | `getByRole('heading', { name: '项目分析', level: 1 })` | `page.tsx:227` |
+| 三总状态徽标 | `getByText('初步清单 · 不代表完整分析')` | `page.tsx:229` |
+| 证据卡区块 | `getByRole('heading', { name: /^证据卡/ })`，再用其父 `section` 限定范围 | `page.tsx:328` |
+| 结论层区块 | `getByRole('heading', { name: /^结论层/ })`，再用其父 `section` 限定范围 | `page.tsx:371` |
+| 业务流程区块 | `getByRole('heading', { name: /^业务流程（/ })` | `page.tsx:413` |
+| 知识节点 / 术语卡片 / 自测题 / 定位挑战 | 同理按 `h2` 文本前缀定位 | `page.tsx:449` / `:481` / `:509` / `:534` |
+| 启动按钮 | `getByRole('button', { name: '启动完整分析（map）' })` | `page.tsx:271` |
+| 揭示按钮 | `getByRole('button', { name: '查看答案' })` / `{ name: '揭示位置' }` | `page.tsx:524` / `:547` |
+| 错误态文案 | `getByText('项目 999999 不存在或已被删除')` | `page.tsx:161` + `:214` |
 
-**建议（不在本轮实施）**：给五个 `section` 补 `data-testid`（如 `evidence-card` / `flow-list` / `node-list` / `term-list` / `practice-list`），给两个启动按钮补 `aria-label`。改动属业务源码，需「按方案开发」授权。
+**建议（不在本轮实施）**：给六个 `section` 补 `data-testid`（如 `evidence-card` / `claim-list` / `flow-list` / `node-list` / `term-list` / `practice-list`），给两个启动按钮补 `aria-label`。改动属业务源码，需「按方案开发」授权。
 
 ## 验收缺口（记入，不自行新增 SPEC）
 

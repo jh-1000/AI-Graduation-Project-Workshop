@@ -142,6 +142,14 @@ Running 16 tests using 1 worker
 2. `analyze` 成功路径 / zip 成功路径 / LLM 有数据形态未进自动化（M1–M3）。
 3. 5 个只读端点对不存在项目返回 200 空结构，与 `projects/[id]` 的 404 语义不一致（M4，既有行为，本轮未改）。
 
+## 后续批次补充（claims 结论层，2026-10-27）
+
+本记录描述的是 be-test 批次当时的执行事实（**16 passed**）。后续 claims 结论层批次新增了 **API-17**（`GET /api/projects/[id]/claims` 的 derivation / review_state / 支撑证据可回溯），用例数变为 **17**，全量套件（FE 7 + BE 17）为 **24 passed**。
+
+- API-17 断言：`analysisVersion=scan-v1`；claims 3 条；`review_state` 排序后为 `["draft","draft","supported"]`；流程结论 2 条均 `derivation=inferred` / `review_state=draft` / `content.startsWith("业务流程「")` / `supports.length > 0`；端点结论 1 条 `derivation=direct_extraction` / `review_state=supported` / content 含 `GET /api/tasks` 与 `src/server/index.ts:7`；所有 `supports[].start_line > 0`；`?version=ghost-v0` 返回空集。
+- 负向对照（对照 B：跳过未覆盖端点结论）→ `--grep API-17` 得 1 failed，报错原文 `Expected length: 3` / `Received length: 2`。
+- 本批次的执行细节与库内终态见 [[04-Dev-Tasks/BE-claims\|BE-claims]]。
+
 ## 下一步
 
 - 补 `api/API.md` 后，本计划的「来源」表可从「route.ts 原文」升级为「契约文档 + 实现」双源。
