@@ -12,6 +12,7 @@ import { extractFromFile, isTextFile } from "../src/lib/scan";
 import { extractSymbolsTs } from "../src/lib/symbols";
 import { persistEvidence, persistSymbols } from "../src/lib/evidence";
 import { detectFlows, persistFlows } from "../src/lib/flows";
+import { persistClaims } from "../src/lib/claims";
 
 const FIXTURE_ROOT = path.join(process.cwd(), "fixtures", "fixture1-todo-clip");
 const SLUG = "regression-fixture1";
@@ -198,13 +199,96 @@ function main(): boolean {
   }[];
   if (dbSteps.length === 0) failures.push("flow_steps 未落库");
 
+  // 结论层：把证据 + 流程合起来表述成带 derivation / review_state 的结论（确定性，不需要模型密钥）
+  // fixture1 的预期：2 条流程结论（各自只有 1 步能对上证据行 → 都必须是 draft）
+  //                + 1 条「未被流程引用的端点」结论（GET /api/tasks 不参与写入流程 → supported）
+  const pc = persistClaims(imported.projectId, run.version);
+  if (pc.inserted !== 3) failures.push(`claims 行数不符：实际 ${pc.inserted}，预期 3`);
+  if (pc.skipped !== 0) failures.push(`claims 不应有跳过：实际 ${pc.skipped}`);
+  if (pc.linked !== 3) failures.push(`claim_evidence 行数不符：实际 ${pc.linked}，预期 3`);
+
+  const dbClaims = db
+    .prepare(
+      "SELECT id, content, derivation, review_state, subject_type, subject_id FROM claims WHERE project_id = ? AND analysis_version = ? ORDER BY id"
+    )
+    .all(imported.projectId, run.version) as {
+    id: number;
+    content: string;
+    derivation: string;
+    review_state: string;
+    subject_type: string | null;
+    subject_id: number | null;
+  }[];
+  if (dbClaims.length !== pc.inserted) {
+    failures.push(`claims 库内行数不符：库内 ${dbClaims.length}，写入 ${pc.inserted}`);
+  }
+  const flowClaims = dbClaims.filter((c) => c.subject_type === "flow");
+  const evClaims = dbClaims.filter((c) => c.subject_type === "evidence");
+  if (flowClaims.length !== 2) failures.push(`流程结论数不符：实际 ${flowClaims.length}，预期 2`);
+  if (evClaims.length !== 1) failures.push(`证据结论数不符：实际 ${evClaims.length}，预期 1`);
+  for (const c of flowClaims) {
+    if (c.derivation !== "inferred") failures.push(`流程结论 derivation 不符：${c.derivation}`);
+    // 关键业务规则：流程只要有一步骤对不上证据行，结论就不能标 supported
+    if (c.review_state !== "draft") {
+      failures.push(`流程结论 review_state 应为 draft（步骤未被证据完整支撑）：实际 ${c.review_state} —— ${c.content}`);
+    }
+    if (!c.content.startsWith("业务流程「")) failures.push(`流程结论文案不符：${c.content.slice(0, 40)}`);
+  }
+  for (const c of evClaims) {
+    if (c.derivation !== "direct_extraction") failures.push(`证据结论 derivation 不符：${c.derivation}`);
+    if (c.review_state !== "supported") failures.push(`证据结论 review_state 应为 supported：实际 ${c.review_state}`);
+    // GET /api/tasks 定义在 src/server/index.ts:7，不参与任何写入流程
+    if (!c.content.includes("GET /api/tasks") || !c.content.includes("src/server/index.ts:7")) {
+      failures.push(`证据结论未指向 GET /api/tasks@src/server/index.ts:7：${c.content}`);
+    }
+  }
+
+  const dbLinks = db
+    .prepare(
+      "SELECT ce.claim_id, ce.support_role, e.file_path, e.start_line FROM claim_evidence ce JOIN claims c ON c.id = ce.claim_id JOIN evidence e ON e.id = ce.evidence_id WHERE c.project_id = ? AND c.analysis_version = ? ORDER BY ce.claim_id"
+    )
+    .all(imported.projectId, run.version) as {
+    claim_id: number;
+    support_role: string | null;
+    file_path: string;
+    start_line: number | null;
+  }[];
+  if (dbLinks.length !== pc.linked) {
+    failures.push(`claim_evidence 库内行数不符：库内 ${dbLinks.length}，写入 ${pc.linked}`);
+  }
+  const roles = dbLinks.map((l) => l.support_role).sort();
+  // post-api-tasks 的端点步是第 4 步、patch-api-tasks 的端点步是第 1 步、证据结论挂 defines
+  if (roles.join(",") !== "defines,step:1,step:4") {
+    failures.push(`claim_evidence support_role 不符：实际 ${roles.join(",")}，预期 defines,step:1,step:4`);
+  }
+  for (const l of dbLinks) {
+    if (l.start_line === null) failures.push(`claim_evidence 指向的证据缺行号：${l.file_path}`);
+  }
+
+  // 幂等：同版本再跑一次，结论数不增不减（按版本整体替换）
+  const pc2 = persistClaims(imported.projectId, run.version);
+  if (pc2.inserted !== pc.inserted || pc2.linked !== pc.linked) {
+    failures.push(
+      `claims 重跑不幂等：第二次 inserted=${pc2.inserted} linked=${pc2.linked}，第一次 inserted=${pc.inserted} linked=${pc.linked}`
+    );
+  }
+  const afterRerun = (
+    db.prepare("SELECT COUNT(*) AS n FROM claims WHERE project_id = ? AND analysis_version = ?").get(
+      imported.projectId,
+      run.version
+    ) as { n: number }
+  ).n;
+  if (afterRerun !== pc.inserted) {
+    failures.push(`claims 重跑后行数漂移：库内 ${afterRerun}，预期 ${pc.inserted}`);
+  }
+
   db.prepare(
     "INSERT INTO regression_results (fixture, passed, failures) VALUES (?, ?, ?)"
   ).run("fixture1-todo-clip", failures.length === 0 ? 1 : 0, JSON.stringify(failures));
 
   if (failures.length === 0) {
     console.log(
-      `回归 PASS：fixture1 全部检查通过（symbols=${ps.inserted} evidence=${pe.inserted} flows=${pf.inserted} steps=${dbSteps.length} skipped=${ps.skipped + pe.skipped}）`
+      `回归 PASS：fixture1 全部检查通过（symbols=${ps.inserted} evidence=${pe.inserted} flows=${pf.inserted} steps=${dbSteps.length} claims=${pc.inserted} links=${pc.linked} skipped=${ps.skipped + pe.skipped}）`
     );
     return true;
   }

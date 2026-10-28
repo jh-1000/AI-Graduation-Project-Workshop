@@ -10,9 +10,11 @@
 
 ---
 
-## 当前状态：P0 收尾 + P1 数据与 UI 骨架
+## 当前状态：P0–P2 完成，P3/P4/P5 功能已落地
 
-这是一个**可运行的骨架**，不是完成品。已经打通的与尚未打通的，都如实列在下面——请不要按 `aidd-wiki/output/fe-demo/` 里那份 1877 行的设计原型来预期当前 UI，那只是设计稿。
+系统已完成计划中的全部功能批次：P0 骨架与验证、P1 最小闭环、P2 可靠分析底座（失效传播 / 体检 / git 考古 / token 计量与预算）、P3 学习体验全量（练习闭环 / 混淆对比卡 / 全局助手 / 任务书 / 语音作答）、P4 答辩实战（改码挑战双轨隔离 / 破坏实验 / 运行验证 / 冲刺模式）、P5 图谱失效视图与双导出（Obsidian wiki / 答辩速查包）。
+
+UI 按 `aidd-wiki/output/fe-demo/` 设计稿实现：14 个功能页挂在 `/project/[id]/` 下，支持多项目、专注模式与语音作答。
 
 > **依赖说明**：`typescript` 已从 7.0.2 降到 **6.0.3**。TS 7 是原生编译器，不提供 Next.js 15 需要的 JS compiler API（`ts.sys` 为 `undefined`），会让 `next dev` / `next build` 在加载 `next.config.ts` 时直接失败（`Failed to load next.config.ts`）。降到 TS 6 后 `npm run build` 与 `npm run dev` 均已实测通过。若要回到 TS 7，需同时把 Next 升到 `>=16.2.11`。
 >
@@ -29,21 +31,38 @@
 | 独立 worker 子进程，两条阶段链（scan：scan→symbols→evidence；map：symbols→evidence→flows→nodes→terms→practice），断点续跑、分批、心跳、detached 派生、条件抢占 | `worker/worker.ts` |
 | 符号与静态证据落库（ts-morph 符号 / 正则端点与路由 → `symbols`、`evidence`，均带 `analysis_version`） | `src/lib/evidence.ts` |
 | 业务流程确定性追踪（端点 → handler → 请求 → 服务端 → 数据表 → 响应，六类锚点全部带 `file:line`，**不需要 API Key**） | `src/lib/flows.ts` |
+| 结论层落库（`claims` + `claim_evidence`：业务流程级结论 derivation=`inferred`、未覆盖端点结论 derivation=`direct_extraction`；review_state 由「每步是否都对上证据行」确定性判定，**不需要 API Key**） | `src/lib/claims.ts` |
 | LLM 分析层（节点 / 术语 / 练习，三套 zod schema；无 Key 时写 `open_questions` 并降级为空，绝不抛异常） | `src/lib/llm/analyze.ts` |
 | LLM 客户端（缓存 / 重试 / zod 校验 / JSON 容错）**已接入出站过滤器** | `src/lib/llm/client.ts` |
 | 出站过滤器（敏感文件排除、密钥遮蔽、SSRF 校验） | `src/lib/llm/{outbound,ssrf}.ts` |
-| Web UI：项目列表与导入、项目分析页（证据卡 / 业务流程 / 知识节点 / 术语 / 自测题 / 定位挑战）、设置页 | `src/app/` |
+| Web UI：项目列表与导入、项目分析页（证据卡 / 结论层 / 业务流程 / 知识节点 / 术语 / 自测题 / 定位挑战）、设置页 | `src/app/` |
 | 回归脚本 + T1–T6 技术验证 | `scripts/` |
+| 失效传播（哈希对比 → 证据 stale → 结论 flagged → 开放问题，按最新版本过滤） | `src/lib/invalidation.ts` + `/impact` 页 |
+| 全库体检（TODO/console/空 catch 等）+ git 考古时间线 | `src/lib/audit.ts` / `gitlog.ts` + `/insights` 页 |
+| 六维覆盖统计（选料不改变口径） | `src/lib/coverage.ts` |
+| lockfile 真实版本扫描 | `src/lib/lockfile.ts` |
+| 知识图谱 2D/3D 力导向（八类节点、失效视图、单击侧卡、双击直达） | `/project/[id]/graph` + `/api/.../graph` |
+| 业务流程线四动作（看懂/看代码/追下去/考考我）+ 反向追踪 | `/project/[id]/flow` |
+| 知识点页三档深度 + 寓言卡（LLM 四段生成）+ 证据卡 + 掌握按钮 | `/project/[id]/node` |
+| 知识库双视图 + FSRS 复习队列（ts-fsrs 真实调度）+ 术语混淆对比卡 | `/project/[id]/kb` |
+| 答辩模拟：任务书注入 + 一次一问 + 双轴评分 + 阶梯提示 + 复述终局 + 语音作答 | `/project/[id]/defend` |
+| 实战挑战：定位校验 + 改码（worktree/副本双轨 + diff + 验证黑名单 + 回滚 + 三态终局）+ 破坏实验 | `/project/[id]/challenge` + `src/lib/challenge.ts` |
+| 能力雷达 + 答辩冲刺（任务书日期驱动） | `/project/[id]/radar` |
+| 代码库阅读器（IDE 式：文件树/高亮/证据行/行号定位/静态引用） | `/project/[id]/code` |
+| 变更影响页 + 体检与演进页 | `/project/[id]/impact` / `insights` |
+| 全局学习助手（词法+图谱检索 → 证据绑定回答，不足明说） | `AskPanel` + `/api/.../ask` |
+| 双导出：Obsidian [[双链]] wiki (.zip) + 答辩速查包 (离线 HTML) | `/api/.../export/*` |
+| 多语言符号抽取（py/go/java/rust/c/cpp tree-sitter） | `src/lib/symbols-multi.ts` |
+| token 计量与预算上限（超限降级开放问题，不整单失败） | `src/lib/llm/client.ts` + `/api/stats` |
+| Playwright 27 用例（前端 10 + API 17） | `e2e/` |
 
-### 尚未打通
+### 尚未打通 / 已知边界
 
-- **LLM 阶段从未真实跑过**：`settings` 表 0 行，API Key 从未配置。节点 / 术语 / 练习三个区块在无 Key 时为空，并在 `open_questions` 记录原因——这是设计内降级，不是失败。
-- **结论层仍是零写入者**：`claims` / `claim_evidence` / `claim_dependencies` / `edges` / `coverage_stats` / `repo_insights` / `history_events` 均无写入代码；`flow_steps.evidence_id` 与 `practice_items.evidence_id` 列已建但未写入。
-- **失效传播未实现**：DES-evidence 点名的 `src/lib/invalidation.ts` 不存在；`symbols` 与 `evidence` 之间无连接键（见 `aidd-wiki/Decision-Register.md` D-1）。
-- **Map 十阶段只实现了五段**：架构总览 / 模块深挖 / 建边 / 体检 / git 考古 / 双重校验 / 六维覆盖均未实现；选料用「取 loc 最大的 20 个已解析文件」而非 PageRank（`src/lib/repomap.ts` 不存在）。
-- **P3–P5 表未建**：`node_mastery` / `learning_attempts` / `grill_sessions` / `challenges` / `challenge_runs` 等均无。
-- **无 lockfile 解析**、`src/` 内未使用 tree-sitter（仅验证脚本使用）。
-- **UI 只做过一次实机走查**：在 `/project/35`（fixture1 项目）上跑过一次 map，五个区块正常渲染；未做多项目、大仓库、窄屏与错误态的系统走查。
+- **离线 Whisper 转写**：语音作答当前走浏览器原生 Web Speech（Chrome/Edge + localhost 可用）；彻底离线的 whisper.wasm 层已登记 Decision-Register（D-7 推迟——模型约 40-80MB 且需打包验证，原生路径已覆盖主场景）。
+- **AST 差异对比**：失效传播当前为保守策略（哈希变化即 stale，不做注释/空白豁免）；TODO 已在 invalidation.ts 头注释登记。
+- **FTS5 中文分词增强**：当前词法检索用 LIKE 多关键词；FTS5 + 分词器属可选优化（王芳/simple tokenizer）。
+- **练习六级的 4-6 级**：修改并验证类练习依赖 P4 改码基建（已具备），练习生成器目前产出 1-3 级题为主。
+- **破坏实验的精细化**：沿用改码基建（隔离+diff+回滚），"自动改一行"的脚本化变异未做——用户在工作区手动破坏，效果等价。
 
 ---
 

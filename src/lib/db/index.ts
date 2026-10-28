@@ -69,6 +69,9 @@ export function deleteProjectData(projectId: number): void {
     "DELETE FROM terms WHERE project_id = ?",
     "DELETE FROM open_questions WHERE project_id = ?",
     "DELETE FROM coverage_stats WHERE project_id = ?",
+    // claim_evidence / claim_dependencies 没有 project_id，只能经 claims 子查询定位；必须先删子表再删 claims
+    "DELETE FROM claim_evidence WHERE claim_id IN (SELECT id FROM claims WHERE project_id = ?)",
+    "DELETE FROM claim_dependencies WHERE claim_id IN (SELECT id FROM claims WHERE project_id = ?)",
     "DELETE FROM claims WHERE project_id = ?",
     "DELETE FROM edges WHERE project_id = ?",
     "DELETE FROM symbols WHERE project_id = ?",
@@ -76,6 +79,14 @@ export function deleteProjectData(projectId: number): void {
     "DELETE FROM run_files WHERE project_id = ?",
     "DELETE FROM files WHERE project_id = ?",
     "DELETE FROM analysis_runs WHERE project_id = ?",
+    "DELETE FROM learning_attempts WHERE project_id = ?",
+    "DELETE FROM node_mastery WHERE project_id = ?",
+    "DELETE FROM runtime_proofs WHERE project_id = ?",
+    "DELETE FROM fact_conflicts WHERE project_id = ?",
+    "DELETE FROM user_corrections WHERE project_id = ?",
+    "DELETE FROM challenge_runs WHERE project_id = ?",
+    "DELETE FROM challenges WHERE project_id = ?",
+    "DELETE FROM term_relations WHERE term_id IN (SELECT id FROM terms WHERE project_id = ?)",
   ];
   db.transaction(() => {
     for (const sql of stmts) db.prepare(sql).run(projectId);

@@ -1,566 +1,246 @@
 "use client";
-/** @aidd-ui 02-Design/modules/analysis/ui/p1-loop/UI.md */
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 
-type Preview = {
-  stack: { languages?: string[]; frameworks?: string[]; packageManagers?: string[] };
-  stats: Record<string, number>;
-  endpoints: { method: string; path: string; file: string; line: number }[];
-  routes: { path: string; file: string; kind: string }[];
-  files: { path: string; loc: number; parse_mode: string }[];
+type Data = {
+  project: { id: number; name: string; slug: string; stack: string; source_type: string; root_path: string; mission: string | null; defense_date: string | null };
+  stats: { parse_mode: string; n: number }[];
+  runs: { id: number; version: string; kind: string; status: string; stage: string | null; step: string | null; progress_note: string | null; recovery_count: number; updated_at: string }[];
+  insights: { kind: string; title: string; content: string | null; evidence_note: string | null }[];
+  coverage: { dim: string; target_n: number; done_n: number; failed_n: number; skipped_n: number; note: string | null }[];
+  openQuestions: { question: string; why: string | null; next_check: string | null }[];
+  counts: Record<string, number>;
+  llmCache: { entries: number; hasKey: boolean };
 };
 
-type Run = {
-  id: number;
-  version: string;
-  kind: string;
-  status: string;
-  stage: string | null;
-  step: string | null;
-  progress_note: string | null;
-  recovery_count: number;
-  updated_at: string;
+const DIMS: Record<string, string> = {
+  files: "文件解析",
+  symbols: "符号识别",
+  references: "引用关系",
+  flows: "业务流程",
+  external_deps: "外部依赖",
+  runtime: "运行验证",
 };
 
-type EvidenceRow = {
-  id: number;
-  file_path: string;
-  start_line: number | null;
-  end_line: number | null;
-  origin: string;
-  processing: string;
-  freshness: string;
-  note: string | null;
-};
-
-type SymbolRow = {
-  id: number;
-  name: string;
-  kind: string | null;
-  line: number | null;
-  precision: string;
-  file_path: string;
-};
-
-type EvidenceResp = { analysisVersion: string | null; evidence: EvidenceRow[]; symbols: SymbolRow[] };
-
-type FlowStep = {
-  seq: number;
-  title: string;
-  file_path: string | null;
-  start_line: number | null;
-  note: string | null;
-};
-
-type Flow = {
-  id: number;
-  slug: string;
-  title: string;
-  trigger_desc: string | null;
-  confidence: number | null;
-  status: string;
-  steps: FlowStep[];
-};
-
-type Node = {
-  id: number;
-  slug: string;
-  title: string;
-  kind: string;
-  summary: string | null;
-  sections: { heading: string; body: string }[];
-  evidence_note: string | null;
-  status: string;
-};
-
-type Term = {
-  id: number;
-  slug: string;
-  title: string;
-  plain_def: string | null;
-  pro_def: string | null;
-  example: string | null;
-  pitfall: string | null;
-  avoid_aliases: string[];
-  status: string;
-};
-
-type PracticeItem = {
-  id: number;
-  kind: string;
-  slug: string;
-  prompt: string;
-  answer: string | null;
-  hints: string[];
-  target_file: string | null;
-  target_line: number | null;
-  status: string;
-};
-
-function Badge({ children, tone }: { children: React.ReactNode; tone: "draft" | "pending" | "ok" }) {
-  const cls =
-    tone === "ok"
-      ? "rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-700"
-      : tone === "pending"
-        ? "rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700"
-        : "rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600";
-  return <span className={cls}>{children}</span>;
-}
-
-function statusTone(status: string): "draft" | "pending" | "ok" {
-  if (status === "confirmed") return "ok";
-  if (status === "pending_review") return "pending";
-  return "draft";
-}
-
-export default function ProjectPage() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [activeRun, setActiveRun] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const [evidence, setEvidence] = useState<EvidenceResp>({ analysisVersion: null, evidence: [], symbols: [] });
-  const [flows, setFlows] = useState<Flow[]>([]);
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [terms, setTerms] = useState<Term[]>([]);
-  const [practice, setPractice] = useState<PracticeItem[]>([]);
-  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
-  const [fatal, setFatal] = useState<string | null>(null);
+export default function OverviewPage() {
+  const { id } = useParams<{ id: string }>();
+  const [d, setD] = useState<Data | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [missionEdit, setMissionEdit] = useState<string | null>(null);
+  const [dateEdit, setDateEdit] = useState<string | null>(null);
+  const [missionSaved, setMissionSaved] = useState(false);
 
   const load = useCallback(async () => {
-    // 404/500 时接口返回 { error }，若照旧当数据用会让区块读到 undefined 而整页崩溃
-    const pRes = await fetch(`/api/projects/${id}/preview`);
-    if (!pRes.ok) {
-      setFatal(pRes.status === 404 ? `项目 ${id} 不存在或已被删除` : `加载失败（HTTP ${pRes.status}）`);
+    const res = await fetch(`/api/projects/${id}`);
+    if (!res.ok) {
+      setErr((await res.json()).error ?? "加载失败");
       return;
     }
-    setFatal(null);
-    setPreview(await pRes.json());
-    const dRes = await fetch(`/api/projects/${id}`);
-    if (dRes.ok) setRuns((await dRes.json()).runs ?? []);
-    const paths = ["evidence", "flows", "nodes", "terms", "practice"] as const;
-    const [ev, fl, nd, tm, pr] = await Promise.all(
-      paths.map(async (p) => {
-        const r = await fetch(`/api/projects/${id}/${p}`);
-        return r.ok ? await r.json() : {};
-      })
-    );
-    setEvidence({ analysisVersion: ev.analysisVersion ?? null, evidence: ev.evidence ?? [], symbols: ev.symbols ?? [] });
-    setFlows(fl.flows ?? []);
-    setNodes(nd.nodes ?? []);
-    setTerms(tm.terms ?? []);
-    setPractice(pr.items ?? []);
+    setD(await res.json());
   }, [id]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!activeRun) return;
-    const t = setInterval(async () => {
-      const r = await fetch(`/api/runs/${activeRun}`).then((x) => x.json());
-      if (r.run) {
-        setRuns((prev) => [r.run, ...prev.filter((x) => x.id !== r.run.id)]);
-        if (r.run.status === "completed" || r.run.status === "failed") {
-          clearInterval(t);
-          void load();
-        }
-      }
-    }, 1000);
-    return () => clearInterval(t);
-  }, [activeRun, load]);
+  if (err) return <p className="sub" style={{ color: "var(--mark-red)" }}>{err}</p>;
+  if (!d) return <p className="sub">加载中…</p>;
 
-  async function startAnalyze(kind: "scan" | "map") {
-    setError(null);
-    const res = await fetch(`/api/projects/${id}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind }),
-    });
-    const data = await res.json();
-    if (!res.ok) setError(data.error ?? "启动失败");
-    else setActiveRun(data.runId);
-  }
-
-  if (fatal) return <p className="text-sm text-red-600">{fatal}</p>;
-  if (!preview) return <p className="text-sm text-slate-400">加载中…</p>;
-
-  const quizzes = practice.filter((p) => p.kind === "quiz");
-  const locates = practice.filter((p) => p.kind === "locate");
+  const stack = (() => {
+    try {
+      return JSON.parse(d.project.stack || "{}");
+    } catch {
+      return {};
+    }
+  })() as { languages?: string[]; frameworks?: string[]; packageManagers?: string[] };
+  const lastRun = d.runs[0];
+  const analysisDone = lastRun?.status === "completed";
+  const coverageFull = d.coverage.length > 0;
+  const supported = d.counts.claims > 0;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <Link href="/" className="text-sm text-blue-700 hover:underline">
-          ← 返回项目列表
-        </Link>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold">项目分析</h1>
-          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
-            初步清单 · 不代表完整分析
-          </span>
+    <div>
+      <div className="crumb">OVERVIEW / {d.project.slug}</div>
+      <h1 className="t">{d.project.name}</h1>
+      <p className="sub">
+        {d.project.source_type === "zip" ? "zip 导入（便携）" : "本地路径导入"} · 根目录{" "}
+        <span className="mono" style={{ fontSize: 11 }}>{d.project.root_path}</span>
+      </p>
+
+      <div className="grid3" style={{ marginTop: 18 }}>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-01</span><b>技术栈</b></div>
+          <div className="bd" style={{ fontSize: 13, lineHeight: 2.2 }}>
+            {[...(stack.languages ?? []), ...(stack.frameworks ?? [])].map((t) => (
+              <span key={t} className="badge b-src" style={{ marginRight: 6 }}>{t}</span>
+            ))}
+            {(stack.languages ?? []).length === 0 && <span className="mut">未识别到 manifest</span>}
+            <div className="mut" style={{ fontSize: 11 }}>来自 package.json / pom.xml / requirements.txt / lockfile</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-02</span><b>解析方式（诚实口径）</b></div>
+          <div className="bd state3" style={{ fontSize: 12.5 }}>
+            {d.stats.map((s) => (
+              <div className="st" key={s.parse_mode}>
+                <span>{s.parse_mode}</span>
+                <span>{s.n}</span>
+              </div>
+            ))}
+            {d.stats.length === 0 && <span className="mut">尚无文件记录</span>}
+          </div>
+        </div>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-03</span><b>三个独立状态</b></div>
+          <div className="bd state3" style={{ fontSize: 12.5 }}>
+            <div className="st">
+              <span>分析任务完成</span>
+              <span className={`badge ${analysisDone ? "b-green" : "b-none"}`}>{analysisDone ? "是" : "否"}</span>
+            </div>
+            <div className="st">
+              <span>覆盖充分</span>
+              <span className={`badge ${coverageFull ? "b-infer" : "b-none"}`}>{coverageFull ? "有覆盖数据" : "未生成"}</span>
+            </div>
+            <div className="st">
+              <span>结论有证据支撑</span>
+              <span className={`badge ${supported ? "b-run" : "b-none"}`}>{d.counts.claims} 条结论</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-xs text-slate-500">技术栈</div>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {[...(preview.stack.languages ?? []), ...(preview.stack.frameworks ?? [])].map((t) => (
-              <span key={t} className="rounded bg-slate-100 px-2 py-0.5 text-xs">
-                {t}
-              </span>
-            ))}
-            {(preview.stack.languages ?? []).length === 0 && (
-              <span className="text-sm text-slate-400">未识别</span>
+      <div className="grid2" style={{ marginTop: 16 }}>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-04</span><b>六维覆盖报告</b></div>
+          <div className="bd cov">
+            {d.coverage.length === 0 && (
+              <p className="mut" style={{ fontSize: 12.5 }}>
+                尚无覆盖统计。运行一次「完整分析（map）」后生成。
+              </p>
             )}
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-xs text-slate-500">文件解析情况</div>
-          <div className="mt-2 space-y-1 text-sm">
-            {Object.entries(preview.stats).map(([k, v]) => (
-              <div key={k} className="flex justify-between">
-                <span className="text-slate-600">{k}</span>
-                <span>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-xs text-slate-500">后台分析任务</div>
-          <button
-            className="mt-2 w-full rounded bg-slate-900 px-3 py-2 text-sm text-white"
-            onClick={() => startAnalyze("scan")}
-          >
-            启动扫描任务（scan）
-          </button>
-          <button
-            className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700"
-            onClick={() => startAnalyze("map")}
-          >
-            启动完整分析（map）
-          </button>
-          <p className="mt-2 text-xs text-slate-400">
-            map 在 scan 产物之上追加业务流程、节点讲解、术语与练习；未配置模型密钥时讲解类产物为空。
-          </p>
-          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-        </div>
-      </section>
-
-      {runs.length > 0 && (
-        <section className="rounded-lg border border-slate-200 bg-white">
-          <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-            任务（断点续跑演示：重启应用或等待超时后任务会自动重排）
-          </h2>
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs text-slate-500">
-              <tr>
-                <th className="px-5 py-2">版本</th>
-                <th className="px-5 py-2">类型</th>
-                <th className="px-5 py-2">状态</th>
-                <th className="px-5 py-2">阶段/步骤</th>
-                <th className="px-5 py-2">恢复次数</th>
-                <th className="px-5 py-2">更新时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100">
-                  <td className="px-5 py-2 font-mono text-xs">{r.version}</td>
-                  <td className="px-5 py-2 text-xs text-slate-600">{r.kind}</td>
-                  <td className="px-5 py-2">
-                    <span
-                      className={
-                        r.status === "completed"
-                          ? "rounded bg-green-100 px-2 py-0.5 text-xs text-green-700"
-                          : r.status === "running"
-                            ? "rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700"
-                            : "rounded bg-slate-100 px-2 py-0.5 text-xs"
-                      }
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-2 font-mono text-xs">
-                    {r.stage} {r.step ?? ""}
-                  </td>
-                  <td className="px-5 py-2">{r.recovery_count}</td>
-                  <td className="px-5 py-2 text-xs text-slate-500">{r.updated_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
-
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <h2 className="flex items-center gap-2 border-b border-slate-200 px-5 py-3 text-sm font-medium">
-          证据卡
-          <span className="text-xs font-normal text-slate-400">
-            {evidence.analysisVersion
-              ? `版本 ${evidence.analysisVersion} · 证据 ${evidence.evidence.length} 条 · 符号 ${evidence.symbols.length} 个`
-              : "尚无证据：先启动一次扫描任务"}
-          </span>
-        </h2>
-        {evidence.evidence.length > 0 && (
-          <ul className="divide-y divide-slate-100 text-sm">
-            {evidence.evidence.slice(0, 20).map((e) => (
-              <li key={e.id} className="flex flex-wrap items-center gap-2 px-5 py-2">
-                <span className="font-mono text-xs text-slate-700">
-                  {e.file_path}
-                  {e.start_line ? `:${e.start_line}` : ""}
-                </span>
-                <span className="text-xs text-slate-600">{e.note}</span>
-                <span className="ml-auto flex gap-1">
-                  <Badge tone="draft">{e.origin}</Badge>
-                  <Badge tone="draft">{e.processing}</Badge>
-                  <Badge tone={e.freshness === "current" ? "ok" : "pending"}>{e.freshness}</Badge>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {evidence.symbols.length > 0 && (
-          <div className="flex flex-wrap gap-1 border-t border-slate-100 px-5 py-3">
-            {evidence.symbols.slice(0, 40).map((s) => (
-              <span key={s.id} className="rounded bg-slate-50 px-2 py-0.5 font-mono text-xs text-slate-600">
-                {s.name}
-                <span className="text-slate-400">
-                  {" "}
-                  {s.file_path}
-                  {s.line ? `:${s.line}` : ""}
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-          业务流程（{flows.length}）
-        </h2>
-        {flows.length === 0 && (
-          <p className="px-5 py-6 text-sm text-slate-400">
-            尚无业务流程：启动一次「完整分析（map）」后生成（确定性追踪，不需要模型密钥）。
-          </p>
-        )}
-        <div className="divide-y divide-slate-100">
-          {flows.map((f) => (
-            <div key={f.id} className="px-5 py-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">{f.title}</span>
-                <Badge tone={statusTone(f.status)}>{f.status}</Badge>
-                {f.trigger_desc && <span className="text-xs text-slate-400">触发：{f.trigger_desc}</span>}
-              </div>
-              <ol className="mt-3 space-y-2">
-                {f.steps.map((s) => (
-                  <li key={s.seq} className="flex items-start gap-3 text-sm">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs text-white">
-                      {s.seq}
-                    </span>
-                    <span className="flex-1">{s.title}</span>
-                    <span className="font-mono text-xs text-slate-400">
-                      {s.file_path ?? "?"}
-                      {s.start_line ? `:${s.start_line}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-          知识节点（{nodes.length}）
-        </h2>
-        {nodes.length === 0 && (
-          <p className="px-5 py-6 text-sm text-slate-400">
-            尚无节点讲解：该部分由模型生成，需先在设置页填写 API Key 后重跑完整分析。
-          </p>
-        )}
-        <div className="divide-y divide-slate-100">
-          {nodes.map((n) => (
-            <div key={n.id} className="px-5 py-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">{n.title}</span>
-                <Badge tone="draft">{n.kind}</Badge>
-                <Badge tone={statusTone(n.status)}>{n.status}</Badge>
-              </div>
-              {n.summary && <p className="mt-2 text-sm text-slate-600">{n.summary}</p>}
-              {n.sections.map((s, i) => (
-                <div key={i} className="mt-3">
-                  <div className="text-xs font-medium text-slate-500">{s.heading}</div>
-                  <p className="mt-1 text-sm text-slate-700">{s.body}</p>
+            {d.coverage.map((c) => {
+              const pct = c.target_n > 0 ? Math.round((c.done_n / c.target_n) * 100) : 0;
+              return (
+                <div className="row" key={c.dim}>
+                  <span>{DIMS[c.dim] ?? c.dim}</span>
+                  <div className="bar"><i style={{ width: `${pct}%` }} /></div>
+                  <span className="mut">{c.done_n}/{c.target_n}</span>
                 </div>
-              ))}
-              {n.evidence_note && (
-                <p className="mt-2 font-mono text-xs text-slate-400">依据：{n.evidence_note}</p>
-              )}
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-          术语卡片（{terms.length}）
-        </h2>
-        {terms.length === 0 && (
-          <p className="px-5 py-6 text-sm text-slate-400">尚无术语：需模型生成，配置密钥后重跑完整分析。</p>
-        )}
-        <div className="flex flex-wrap gap-2 px-5 py-4">
-          {terms.map((t) => (
-            <details key={t.id} className="rounded border border-slate-200 px-3 py-2">
-              <summary className="cursor-pointer text-sm">
-                {t.title}
-                {t.status === "draft" && <span className="ml-1 text-xs text-amber-600">待复核</span>}
-              </summary>
-              <div className="mt-2 max-w-md space-y-1 text-xs text-slate-600">
-                {t.plain_def && <p>通俗：{t.plain_def}</p>}
-                {t.pro_def && <p>专业：{t.pro_def}</p>}
-                {t.example && <p className="font-mono">示例：{t.example}</p>}
-                {t.pitfall && <p className="text-amber-700">误区：{t.pitfall}</p>}
-                {t.avoid_aliases.length > 0 && (
-                  <p className="text-slate-400">别名：{t.avoid_aliases.join("、")}</p>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-05</span><b>评委视角体检（疑似，非定论）</b></div>
+          <div className="bd" style={{ fontSize: 12.5, lineHeight: 2 }}>
+            {d.insights.filter((i) => i.kind === "health" || i.kind === "risk").slice(0, 6).map((i, k) => (
+              <div key={k}>
+                · <b>{i.title}</b>
+                {i.evidence_note && !i.title.includes(i.evidence_note) && (
+                  <span className="mono mut" style={{ fontSize: 11 }}>　{i.evidence_note}</span>
                 )}
               </div>
-            </details>
+            ))}
+            {d.insights.filter((i) => i.kind === "health" || i.kind === "risk").length === 0 && (
+              <span className="mut">尚无体检发现（运行 map 后生成）。</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="hd">
+          <span className="file-no">OV-10</span><b>答辩任务书（讲解/出题/冲刺的锚点）</b>
+          <span className="right">
+            <button className="btn sm" type="button" onClick={async () => {
+              const res = await fetch(`/api/projects/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mission: missionEdit ?? "", defenseDate: dateEdit ?? "" }),
+              });
+              if (res.ok) { setMissionSaved(true); void load(); setTimeout(() => setMissionSaved(false), 2000); }
+            }}>保存任务书</button>
+            {missionSaved && <span className="badge b-green">已保存</span>}
+          </span>
+        </div>
+        <div className="bd" style={{ fontSize: 12.5 }}>
+          <div className="row2">
+            <div className="field" style={{ margin: 0 }}>
+              <label>答辩日期</label>
+              <input type="text" className="mono" value={dateEdit ?? ""} onChange={(e) => setDateEdit(e.target.value)} />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>评分依据（自由格式：评委追问 / 你最怕的）</label>
+              <input type="text" value={missionEdit ?? ""} onChange={(e) => setMissionEdit(e.target.value)} />
+            </div>
+          </div>
+          <div className="mut" style={{ fontSize: 11, marginTop: 6 }}>
+            保存后：答辩模拟的出题与评分会引用任务书；能力雷达按日期生成冲刺计划。
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="hd"><span className="file-no">OV-06</span><b>开放问题（证据缺口）</b></div>
+        <div className="bd" style={{ fontSize: 12.5, lineHeight: 2 }}>
+          {d.openQuestions.slice(0, 8).map((q, k) => (
+            <div key={k}>
+              ❓ <b>{q.question}</b>
+              {q.next_check && <span className="mut">（下一步核查：{q.next_check}）</span>}
+            </div>
           ))}
+          {d.openQuestions.length === 0 && <span className="mut">无开放问题。</span>}
         </div>
-      </section>
+      </div>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white">
-          <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">自测题（{quizzes.length}）</h2>
-          {quizzes.length === 0 && (
-            <p className="px-5 py-6 text-sm text-slate-400">尚无自测题：需模型生成。</p>
-          )}
-          <ul className="divide-y divide-slate-100">
-            {quizzes.map((q) => (
-              <li key={q.id} className="px-5 py-3">
-                <p className="text-sm">{q.prompt}</p>
-                {q.hints.length > 0 && (
-                  <p className="mt-1 text-xs text-slate-400">提示：{q.hints.join(" / ")}</p>
-                )}
-                <button
-                  className="mt-2 text-xs text-blue-700 hover:underline"
-                  onClick={() => setRevealed((prev) => ({ ...prev, [q.id]: !prev[q.id] }))}
-                >
-                  {revealed[q.id] ? "收起答案" : "查看答案"}
-                </button>
-                {revealed[q.id] && <p className="mt-1 text-sm text-slate-700">{q.answer}</p>}
-              </li>
+      <div className="grid3" style={{ marginTop: 16 }}>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-07</span><b>资产生成情况</b></div>
+          <div className="bd state3" style={{ fontSize: 12.5 }}>
+            {[
+              ["知识节点", d.counts.nodes],
+              ["业务流程", d.counts.flows],
+              ["术语", d.counts.terms],
+              ["练习/挑战", d.counts.practice],
+              ["证据", d.counts.evidence],
+              ["结论", d.counts.claims],
+            ].map(([k, v]) => (
+              <div className="st" key={k as string}><span>{k}</span><span>{v as number}</span></div>
             ))}
-          </ul>
+          </div>
         </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white">
-          <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-            定位挑战（{locates.length}）
-          </h2>
-          {locates.length === 0 && (
-            <p className="px-5 py-6 text-sm text-slate-400">尚无定位挑战：需模型生成。</p>
-          )}
-          <ul className="divide-y divide-slate-100">
-            {locates.map((q) => (
-              <li key={q.id} className="px-5 py-3">
-                <p className="text-sm">{q.prompt}</p>
-                <button
-                  className="mt-2 text-xs text-blue-700 hover:underline"
-                  onClick={() => setRevealed((prev) => ({ ...prev, [q.id]: !prev[q.id] }))}
-                >
-                  {revealed[q.id] ? "收起位置" : "揭示位置"}
-                </button>
-                {revealed[q.id] && (
-                  <p className="mt-1 font-mono text-xs text-slate-700">
-                    {q.target_file ?? "?"}
-                    {q.target_line ? `:${q.target_line}` : ""}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-08</span><b>LLM 花费与缓存</b></div>
+          <div className="bd" style={{ fontSize: 12.5, lineHeight: 2.1 }}>
+            <div>API Key：{d.llmCache.hasKey ? <span className="badge b-green">已配置</span> : <span className="badge b-stale">未配置（将写入开放问题）</span>}</div>
+            <div>缓存条目：<b>{d.llmCache.entries}</b></div>
+            <div className="mut" style={{ fontSize: 11 }}>相同输入命中缓存零 token；知识点是落库实体，浏览不触发生成。</div>
+            <Link className="btn sm ghost" href={`/project/${id}/settings`}>去设置</Link>
+          </div>
         </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white">
-          <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-            API 端点（{preview.endpoints.length}）
-          </h2>
-          <ul className="divide-y divide-slate-100 text-sm">
-            {preview.endpoints.slice(0, 30).map((e, i) => (
-              <li key={i} className="flex items-center gap-3 px-5 py-2">
-                <span className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-xs text-white">
-                  {e.method}
-                </span>
-                <span className="font-mono">{e.path}</span>
-                <span className="ml-auto text-xs text-slate-400">
-                  {e.file}:{e.line}
-                </span>
-              </li>
-            ))}
-            {preview.endpoints.length === 0 && (
-              <li className="px-5 py-8 text-center text-slate-400">未抽取到端点</li>
-            )}
-          </ul>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-09</span><b>导出（P5）</b></div>
+          <div className="bd" style={{ fontSize: 12.5, display: "flex", flexDirection: "column", gap: 8 }}>
+            <a className="btn sm" href={`/api/projects/${id}/export/obsidian`}>导出 Obsidian 双链 wiki (.zip)</a>
+            <a className="btn sm ghost" href={`/api/projects/${id}/export/cheatsheet`}>导出答辩速查包 (.html)</a>
+            <div className="mut" style={{ fontSize: 11 }}>速查包含流程卡/知识点/术语/疑似追问，可打印。</div>
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white">
-          <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-            前端路由（{preview.routes.length}）
-          </h2>
-          <ul className="divide-y divide-slate-100 text-sm">
-            {preview.routes.slice(0, 30).map((r, i) => (
-              <li key={i} className="flex items-center gap-3 px-5 py-2">
-                <span className="font-mono">{r.path}</span>
-                <span className="ml-auto text-xs text-slate-400">
-                  {r.kind} · {r.file}
-                </span>
-              </li>
+        <div className="card">
+          <div className="hd"><span className="file-no">OV-99</span><b>最近任务</b></div>
+          <div className="bd" style={{ fontSize: 12 }}>
+            {d.runs.slice(0, 4).map((r) => (
+              <div key={r.id} className="mono" style={{ marginBottom: 4 }}>
+                {r.version} · <b>{r.status}</b> · {r.stage ?? "-"} {r.step ?? ""}
+                {r.status === "running" && <span className="badge b-ai" style={{ marginLeft: 6 }}>运行中</span>}
+              </div>
             ))}
-            {preview.routes.length === 0 && (
-              <li className="px-5 py-8 text-center text-slate-400">未抽取到路由</li>
-            )}
-          </ul>
+            {d.runs.length === 0 && <span className="mut">尚无任务</span>}
+          </div>
         </div>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <h2 className="border-b border-slate-200 px-5 py-3 text-sm font-medium">
-          文件（前 {Math.min(preview.files.length, 100)} / 共 {preview.files.length}）
-        </h2>
-        <table className="w-full text-sm">
-          <tbody>
-            {preview.files.slice(0, 100).map((f) => (
-              <tr key={f.path} className="border-b border-slate-100 last:border-0">
-                <td className="px-5 py-1.5 font-mono text-xs">{f.path}</td>
-                <td className="px-5 py-1.5 text-right text-xs text-slate-500">{f.loc} 行</td>
-                <td className="px-5 py-1.5 text-right">
-                  <span
-                    className={
-                      f.parse_mode === "parsed"
-                        ? "rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700"
-                        : "rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500"
-                    }
-                  >
-                    {f.parse_mode}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      </div>
     </div>
   );
 }

@@ -41,6 +41,8 @@ export async function run(): Promise<{ status: "pass" | "fail" | "skip"; detail:
     const t4 = backup.prepare("SELECT COUNT(*) AS n FROM t4_pressure").get() as { n: number };
     backup.close();
     fs.rmSync(dest, { force: true });
+    // 压测表不入主库：验证完即清理（保持数据目录干净）
+    db.exec("DROP TABLE IF EXISTS t4_pressure");
 
     if (integrity === "ok" && dst.n === src.n && t4.n > 0) {
       return {

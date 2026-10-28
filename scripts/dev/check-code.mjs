@@ -1,0 +1,15 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const p = await (await b.newContext({ viewport: { width: 1680, height: 1000 } })).newPage();
+const errs = [];
+p.on("pageerror", (e) => errs.push(String(e).slice(0, 200)));
+await p.goto("http://127.0.0.1:4321/project/47/code?path=src/server/index.ts&line=12", { waitUntil: "domcontentloaded" });
+await p.waitForSelector(".ccode .cl", { timeout: 30000 });
+const lines = await p.locator(".ccode .cl").count();
+const ev = await p.locator(".ccode .cl.ev").count();
+const cur = await p.locator(".ccode .cl.cur").count();
+const sym = await p.locator(".orow").count();
+console.log("lines", lines, "evLines", ev, "cur", cur, "outlineRows", sym);
+console.log("errors", errs.length ? errs.join(" | ") : "none");
+await p.screenshot({ path: "aidd-wiki/output/screens/03-code.png", fullPage: true });
+await b.close();

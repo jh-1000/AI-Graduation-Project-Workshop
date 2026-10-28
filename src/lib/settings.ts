@@ -47,6 +47,10 @@ export function getApiKeyInternal(): string | null {
   return get("llm_api_key") ?? null;
 }
 
+export function hasApiKey(): boolean {
+  return Boolean(getApiKeyInternal());
+}
+
 export function maskedApiKey(): string | null {
   const k = getApiKeyInternal();
   if (!k) return null;

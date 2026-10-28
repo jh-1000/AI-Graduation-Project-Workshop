@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { getDb } from "@/lib/db";
 import { createRun, recoverStaleRuns } from "@/lib/tasks";
 
@@ -28,9 +29,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   void recovered;
 
   const body = (await req.json().catch(() => ({}))) as { idemKey?: string; kind?: string };
-  // kind=map 走完整分析链（evidence → flows → nodes → terms → practice）；缺省仍是 scan
+  // kind=map 走完整分析链；缺省仍是 scan
   const kind = body.kind === "map" ? "map" : "scan";
-  const runId = createRun(projectId, kind, body.idemKey);
+
+  // 幂等键：hash(项目路径 + kind + 文件数)——同项目同类型重跑复用进行中的 run
+  const proj = db.prepare("SELECT root_path FROM projects WHERE id = ?").get(projectId) as { root_path: string };
+  const fileCount = db.prepare("SELECT COUNT(*) as n FROM files WHERE project_id = ?").get(projectId) as { n: number };
+  const idemKey = body.idemKey ?? crypto
+    .createHash("sha256")
+    .update(`${proj.root_path}|${kind}|${fileCount.n}`)
+    .digest("hex");
+
+  const runId = createRun(projectId, kind, idemKey);
 
   // 派生 worker 子进程（detached：浏览器关闭不影响任务）；直接 node + tsx/cli，绕过 npx
   const tsxCli = resolveTsxCli();

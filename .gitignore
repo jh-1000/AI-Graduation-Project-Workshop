@@ -8,3 +8,6 @@ npm-debug.log*
 playwright-report/
 test-results/
 %SystemDrive%/
+.qoder-credits/
+dev.log
+.chrome-profile/

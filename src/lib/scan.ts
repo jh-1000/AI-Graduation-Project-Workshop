@@ -72,10 +72,28 @@ export function isTextFile(relPath: string): boolean {
 }
 
 const ENDPOINT_PATTERNS: { re: RegExp; method: (m: RegExpMatchArray) => string }[] = [
-  { re: /\b(?:app|router)\s*\.\s*(get|post|put|patch|delete|all)\s*\(\s*["'`]([^"'`]+)["'`]/, method: (m) => m[1].toUpperCase() },
-  { re: /@(Get|Post|Put|Patch|Delete|RequestMapping)\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/, method: (m) => (m[1] === "RequestMapping" ? "ANY" : m[1].toUpperCase()) },
-  { re: /@(?:app|router)\.(get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/, method: (m) => m[1].toUpperCase() },
+  // Express / Fastify / Koa / Go (Gin/Echo/Echo 小写)
+  { re: /\b(?:app|router|r|e|server)\s*\.\s*(get|post|put|patch|delete|all|GET|POST|PUT|PATCH|DELETE)\s*\(\s*["'`]([^"'`]+)["'`]/, method: (m) => m[1].toUpperCase() },
+  // NestJS / Spring 装饰器
+  { re: /@(Get|Post|Put|Patch|Delete|RequestMapping|All)\s*\(\s*(?:value\s*=\s*)?["'`]([^"'`]+)["'`]/, method: (m) => (m[1] === "RequestMapping" ? "ANY" : m[1].toUpperCase()) },
+  // FastAPI / Flask（Python 装饰器）
+  { re: /@(?:app|router|bp)\.(get|post|put|patch|delete|route)\s*\(\s*["'`]([^"'`]+)["'`]/, method: (m) => m[1].toUpperCase() },
+  // Flask app.route / Blueprint.route
   { re: /\b(?:app|bp)\.route\s*\(\s*["'`]([^"'`]+)["'`]\s*,.*methods\s*=\s*\[?\s*["'`](GET|POST|PUT|PATCH|DELETE)/, method: (m) => m[2].toUpperCase() },
+  // Go 大写方法（Gin / Echo / Chi）
+  { re: /\b(?:r|e|router|app|api)\.(GET|POST|PUT|PATCH|DELETE)\s*\(\s*"([^"]+)"/, method: (m) => m[1] },
+  // Axum / Actix (Rust)
+  { re: /\.route\s*\(\s*"([^"]+)"\s*,\s*(?:web::)?(get|post|put|patch|delete)\s*\(/, method: (m) => m[2].toUpperCase() },
+  // Rails
+  { re: /\b(?:get|post|put|patch|delete)\s+["']([^"']+)["']\s*=>/, method: (m) => m[1].toUpperCase() },
+  // Nuxt / Nitro defineEventHandler（从文件路径推断方法，标记为 ANY）
+  { re: /defineEventHandler\s*\(/, method: () => "ANY" },
+  // Next.js Pages Router（pages/api/*.ts 的 export default handler —— 从文件路径推断，方法由文件内检测）
+  { re: /export\s+default\s+(?:async\s+)?(?:function\s+)?handler\b/, method: () => "ANY" },
+  // Hono
+  { re: /\b(?:app|route)\.(get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/, method: (m) => m[1].toUpperCase() },
+  // tRPC / H3
+  { re: /\.(query|mutation)\s*\(\s*\{?\s*path\s*:\s*["'`]([^"'`]+)["'`]/, method: () => "POST" },
 ];
 
 const ROUTE_PATTERNS: { re: RegExp; kind: string }[] = [
@@ -117,4 +135,30 @@ export function nextAppRoute(rel: string): string | null {
   if (norm.includes("app/page.")) return "/";
   if (!m) return null;
   return "/" + m[1].replace(/\((.*?)\)\//g, "").replace(/\[\.\.\.(\w+)\]/g, "*").replace(/\/$/, "");
+}
+
+/** Next.js App Router API 路由约定：app 目录下的 route 文件 → HTTP 端点（P2 补全） */
+export function extractNextApiEndpoints(rel: string, content: string): Endpoint[] {
+  const norm = rel.replace(/\\/g, "/");
+  const m = norm.match(/(?:^|\/)(?:src\/)?app\/(.+?)\/route\.(?:ts|tsx|js)$/);
+  if (!m) return [];
+  const apiPath = "/" + m[1].replace(/\((.*?)\)\//g, "").replace(/\[\.\.\.(\w+)\]/g, "*");
+  const endpoints: Endpoint[] = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    const em = lines[i].match(/export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)\b/);
+    if (em) {
+      endpoints.push({ method: em[1], path: apiPath, file: rel, line: i + 1 });
+    }
+  }
+  return endpoints;
+}
+
+/** Next.js Pages Router API 路由约定：pages/api/ 目录下的文件 → HTTP 端点（路径从文件目录推导，方法 ANY） */
+export function extractNextPagesApiEndpoints(rel: string): Endpoint | null {
+  const norm = rel.replace(/\\/g, "/");
+  const m = norm.match(/(?:^|\/)pages\/api\/(.+?)\.(?:ts|tsx|js)$/);
+  if (!m) return null;
+  const apiPath = "/api/" + m[1].replace(/\[\.\.\.(\w+)\]/g, "*").replace(/\/index$/, "");
+  return { method: "ANY", path: apiPath, file: rel, line: 1 };
 }

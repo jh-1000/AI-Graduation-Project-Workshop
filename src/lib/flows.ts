@@ -107,7 +107,23 @@ export function detectFlows(endpoints: Endpoint[], contents: Map<string, string>
       }
     }
 
-    if (trigger) steps.push({ title: "用户触发前端事件", file: trigger.file, line: trigger.line, note: "onClick" });
+    if (trigger) steps.push({ title: "用户触发前端事件", file: trigger.file, line: trigger.line, note: "event handler" });
+
+    // ②b UI 触发点扩展：onSubmit / addEventListener / form action
+    if (!trigger) {
+      for (const [rel, content] of contents) {
+        if (!/\.(ts|tsx|js|jsx|vue)$/.test(rel)) continue;
+        const fnRef = handler?.name ? content.indexOf(handler.name) : -1;
+        if (fnRef < 0) continue;
+        const sub = content.slice(0, fnRef);
+        const trig = sub.match(/on(?:Submit|Click|Change|Blur)\s*=|addEventListener\s*\(\s*["'](submit|click|change)["']/);
+        if (trig) {
+          const line = lineAt(content, trig.index ?? 0);
+          trigger = { file: rel, line };
+          break;
+        }
+      }
+    }
     if (handler && callSite) {
       steps.push({ title: `${handler.name} 组装请求`, file: callSite.file, line: handler.line, note: "handler" });
       steps.push({ title: `发起 ${ep.method} ${ep.path}`, file: callSite.file, line: callSite.line, note: "request" });
@@ -119,7 +135,29 @@ export function detectFlows(endpoints: Endpoint[], contents: Map<string, string>
     const table = sqlTables.get(res) ?? sqlTables.get(res.replace(/s$/, ""));
     if (table) steps.push({ title: `读写 ${res} 表`, file: table.file, line: table.line, note: "table" });
 
-    // ④ 响应：端点所在文件里该 handler 块内的 res.status/res.json 最后一次出现
+    // ③b ORM 操作检测（prisma / mongoose / sequelize / drizzle / typeorm / knex / supabase）
+    const ormPats = [
+      /prisma\.[\w.]+(?:create|findMany|findUnique|findFirst|update|delete|upsert|aggregate)/i,
+      /(?:db|database)\.(?:collection|model)\.[\w]+\s*\(/i,
+      /(?:sequelize|knex|drizzle|typeorm|supabase)\.[\w.]+\s*\(/i,
+      /\.(?:insertOne|insertMany|findOne|findMany|updateOne|updateMany|deleteOne|deleteMany)\s*\(/,
+    ];
+    for (const [rel, content] of contents) {
+      if (rel === ep.file) continue;
+      const lines = content.split("\n");
+      for (const pat of ormPats) {
+        for (let li = 0; li < lines.length; li++) {
+          if (pat.test(lines[li])) {
+            steps.push({ title: `ORM 操作（${rel.split("/").pop()}）`, file: rel, line: li + 1, note: "orm" });
+            break;
+          }
+        }
+        if (steps.some((s) => s.note === "orm")) break;
+      }
+      if (steps.some((s) => s.note === "orm")) break;
+    }
+
+    // ④ 响应：端点所在文件里该 handler 块内的 res.status/res.json/NextResponse.json/Response.json 最后一次出现
     const serverContent = contents.get(ep.file);
     if (serverContent) {
       const lines = serverContent.split("\n");

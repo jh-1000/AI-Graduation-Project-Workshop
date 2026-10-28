@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const p = await (await b.newContext({ viewport: { width: 1680, height: 1000 } })).newPage();
+await p.goto("http://127.0.0.1:4321/project/47/defend", { waitUntil: "domcontentloaded" });
+await p.waitForSelector("textarea", { timeout: 20000 });
+await p.fill("textarea", "调用 formatDate 返回 2024-02-05。它用 getFullYear 取年，getMonth 取月后加 1，日期补齐两位，所以 2 月返回 02，5 日返回 05，最终按 YYYY-MM-DD 拼接。");
+await p.getByRole("button", { name: "提交回答" }).click();
+await p.waitForSelector(".score2", { timeout: 120000 });
+const axes = await p.locator(".score2 .ax").allInnerTexts();
+console.log("AXES:", axes.map((t) => t.replace(/\n/g, " · ")).join(" || "));
+await p.screenshot({ path: "aidd-wiki/output/screens/09-defend-scored.png", fullPage: true });
+await b.close();

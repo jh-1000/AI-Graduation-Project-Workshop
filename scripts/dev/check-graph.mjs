@@ -1,0 +1,14 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const p = await (await b.newContext({ viewport: { width: 1680, height: 1000 } })).newPage();
+const errs = [];
+p.on("pageerror", (e) => errs.push(String(e).slice(0, 300)));
+p.on("console", (m) => { if (m.type() === "error") errs.push("CONSOLE: " + m.text().slice(0, 200)); });
+await p.goto("http://127.0.0.1:4321/project/47/graph", { waitUntil: "domcontentloaded" });
+await p.waitForTimeout(4000);
+console.log("canvas box:", JSON.stringify(await p.locator("#gcanvas").boundingBox()));
+console.log("canvas pixels:", await p.evaluate(() => { const c = document.querySelector("#gcanvas"); return c ? c.width + "x" + c.height : "no canvas"; }));
+console.log("chips:", await p.locator(".tchip").count());
+console.log("count text:", await p.locator("#gcanvas").evaluate(() => document.body.innerText.match(/显示 \d+\/\d+ 节点/)?.[0] ?? "none"));
+console.log("errors:", errs.length ? errs.join("\n") : "none");
+await b.close();

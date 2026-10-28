@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const p = await (await b.newContext()).newPage();
+const errs = [];
+p.on("pageerror", (e) => errs.push(e.message.slice(0, 300)));
+p.on("console", (m) => { if (m.type() === "error") errs.push("CONSOLE: " + m.text().slice(0, 200)); });
+await p.goto("http://127.0.0.1:4321/project/53/kb", { waitUntil: "domcontentloaded" });
+await p.waitForTimeout(3000);
+const txt = await p.locator("body").innerText();
+console.log("page text head:", txt.slice(0, 400).replace(/\n+/g, " | "));
+console.log("errors:", errs.length ? errs.join("\n") : "none");
+await b.close();

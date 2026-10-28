@@ -1,0 +1,12 @@
+import { chromium } from "playwright";
+const base = "http://127.0.0.1:4321";
+const list = await fetch(`${base}/api/projects`).then((r) => r.json());
+const pid = list.projects.find((x) => x.slug === "regression-fixture1").id;
+const b = await chromium.launch();
+const p = await (await b.newContext()).newPage();
+await p.goto(`${base}/project/${pid}/kb`, { waitUntil: "domcontentloaded" });
+await p.waitForTimeout(4000);
+const txt = await p.locator("main").innerText();
+console.log("pid", pid, "| has 日期格式化工具:", txt.includes("日期格式化工具"), "| has 暂无知识点:", txt.includes("该类型下暂无知识点"));
+await p.screenshot({ path: "aidd-wiki/output/screens/07-kb.png", fullPage: true });
+await b.close();

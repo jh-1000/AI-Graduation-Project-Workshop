@@ -8,6 +8,22 @@ import { detectStack } from "./scan";
 export const NOISE_DIRS = new Set([
   "node_modules", ".git", "dist", "build", ".next", "out", "venv",
   "__pycache__", ".idea", ".vscode", "coverage", ".gradle", "target",
+  ".npm", ".npm-cache", ".pnpm-store", ".yarn", "data", "aidd-wiki",
+  ".qoder-credits", "playwright-report", "test-results", "e2e",
+  ".cache", "tmp", "temp", ".sass-cache", ".turbo", ".vercel",
+  "vendor", "bower_components", ".terraform",
+]);
+
+/** 二进制 / 缓存 / 非源码文件扩展名——扫描时跳过 */
+const NOISE_EXTS = new Set([
+  ".bin", ".exe", ".dll", ".so", ".dylib", ".pdb", ".obj", ".o", ".a",
+  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp", ".bmp",
+  ".mp3", ".mp4", ".avi", ".mov", ".wav", ".flac",
+  ".zip", ".tar", ".gz", ".bz2", ".7z", ".rar",
+  ".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm",
+  ".woff", ".woff2", ".ttf", ".eot", ".otf",
+  ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+  ".wasm", ".node", ".tsbuildinfo", ".lock", ".log",
 ]);
 
 const MAX_ZIP_TOTAL = 500 * 1024 * 1024;
@@ -46,21 +62,33 @@ function countLines(buf: Buffer): number {
 export type ImportResult = { projectId: number; fileCount: number; runId: number };
 
 /** 路径导入：realpath 授权 + 递归扫描 + 快照。噪音目录跳过。 */
-export function importFromPath(slug: string, name: string, rawPath: string): ImportResult {
+export function importFromPath(
+  slug: string,
+  name: string,
+  rawPath: string,
+  mission?: string | null,
+  defenseDate?: string | null
+): ImportResult {
   const root = fs.realpathSync(rawPath);
   if (!fs.statSync(root).isDirectory()) throw new Error("路径不是目录");
   const db = getDb();
   const exists = db.prepare("SELECT id FROM projects WHERE slug = ?").get(slug);
   if (exists) throw new Error(`slug 已存在：${slug}`);
   const info = db
-    .prepare("INSERT INTO projects (slug, name, source_type, root_path) VALUES (?, ?, 'path', ?)")
-    .run(slug, name, root);
+    .prepare("INSERT INTO projects (slug, name, source_type, root_path, mission, defense_date) VALUES (?, ?, 'path', ?, ?, ?)")
+    .run(slug, name, root, mission ?? null, defenseDate ?? null);
   const projectId = Number(info.lastInsertRowid);
   return finishImport(projectId, root);
 }
 
 /** zip 导入：条目消毒 + 上限防炸弹，解压到 data/workspaces/<slug>（相对路径，便携） */
-export function importFromZip(slug: string, name: string, zipPath: string): ImportResult {
+export function importFromZip(
+  slug: string,
+  name: string,
+  zipPath: string,
+  mission?: string | null,
+  defenseDate?: string | null
+): ImportResult {
   const zip = new AdmZip(zipPath);
   const entries = zip.getEntries();
   if (entries.length > MAX_ZIP_ENTRIES) throw new Error(`zip 条目数超限（>${MAX_ZIP_ENTRIES}）`);
@@ -99,8 +127,8 @@ export function importFromZip(slug: string, name: string, zipPath: string): Impo
   if (exists) throw new Error(`slug 已存在：${slug}`);
   const root = fs.realpathSync(workspace);
   const info = db
-    .prepare("INSERT INTO projects (slug, name, source_type, root_path) VALUES (?, ?, 'zip', ?)")
-    .run(slug, name, root);
+    .prepare("INSERT INTO projects (slug, name, source_type, root_path, mission, defense_date) VALUES (?, ?, 'zip', ?, ?, ?)")
+    .run(slug, name, root, mission ?? null, defenseDate ?? null);
   return finishImport(Number(info.lastInsertRowid), root);
 }
 
@@ -143,6 +171,8 @@ function finishImport(projectId: number, root: string): ImportResult {
         continue;
       }
       const ext = path.extname(entry.name).slice(0, 16) || null;
+      // 跳过二进制/缓存文件（但保留 package.json 等元数据）
+      if (NOISE_EXTS.has(ext?.toLowerCase() ?? "") && entry.name !== "package.json") continue;
       let loc = 0;
       let hash: string | null = null;
       try {

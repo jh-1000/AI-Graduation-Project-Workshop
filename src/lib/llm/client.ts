@@ -5,6 +5,39 @@ import { getApiKeyInternal, getLlmSettings } from "../settings";
 import { assertUrlAllowed } from "./ssrf";
 import { buildContext, type ContextPart } from "./outbound";
 
+const BUDGET_ENV = "PAL_BUDGET_TOKENS";
+let spentThisProcess = 0;
+
+export class BudgetExceededError extends Error {
+  constructor(public readonly budget: number, public readonly spent: number) {
+    super(`预算超限：已用 ${spent} tokens / 上限 ${budget}`);
+    this.name = "BudgetExceededError";
+  }
+}
+
+function budget(): number {
+  const raw = process.env[BUDGET_ENV];
+  const n = raw ? Number(raw) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function assertBudget(): void {
+  const b = budget();
+  if (b > 0 && spentThisProcess >= b) throw new BudgetExceededError(b, spentThisProcess);
+}
+
+function bumpMeta(key: string, delta: number): void {
+  try {
+    getDb()
+      .prepare(
+        "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + ? AS TEXT)"
+      )
+      .run(key, String(delta), delta);
+  } catch {
+    /* 计量失败不影响主流程 */
+  }
+}
+
 function sha256(s: string): string {
   return crypto.createHash("sha256").update(s).digest("hex");
 }
@@ -16,18 +49,23 @@ function cacheGet(key: string): string | null {
   return row?.response ?? null;
 }
 
-function cachePut(key: string, response: string, model: string): void {
+function cachePut(
+  key: string,
+  response: string,
+  model: string,
+  usage?: { promptTokens: number; completionTokens: number }
+): void {
   getDb()
     .prepare(
       "INSERT OR REPLACE INTO llm_cache (key, response, model, meta) VALUES (?, ?, ?, ?)"
     )
-    .run(key, response, model, JSON.stringify({ kind: "chat_json" }));
+    .run(key, response, model, JSON.stringify({ kind: "chat_json", ...(usage ?? {}) }));
 }
 
 async function callChatApi(
   messages: { role: string; content: string }[],
   temperature: number
-): Promise<string> {
+): Promise<{ content: string; promptTokens: number; completionTokens: number }> {
   const s = getLlmSettings();
   const key = getApiKeyInternal();
   if (!key) throw new Error("未配置 API Key：请先到设置页填写并保存");
@@ -65,10 +103,15 @@ async function callChatApi(
     }
     const data = (await resp.json()) as {
       choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== "string") throw new Error("LLM 返回缺少 content");
-    return content;
+    return {
+      content,
+      promptTokens: data.usage?.prompt_tokens ?? 0,
+      completionTokens: data.usage?.completion_tokens ?? 0,
+    };
   }
   throw new Error("重定向次数过多（>3）");
 }
@@ -141,29 +184,41 @@ export async function chatJSON<T>(opts: ChatJsonOptions<T>): Promise<{
   );
   const hit = cacheGet(cacheKey);
   if (hit) {
+    bumpMeta("llm_cache_hits", 1);
     return { data: opts.schema.parse(JSON.parse(extractJson(hit))), cached: true, cacheKey, outbound };
   }
+  bumpMeta("llm_cache_misses", 1);
 
+  assertBudget();
   const maxRetries = opts.maxRetries ?? 2;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const text = await callChatApi(
+      const res = await callChatApi(
         [
           { role: "system", content: opts.system },
           { role: "user", content: userContent },
         ],
         s.temperature
       );
-      const json = extractJson(text);
+      const tokens = res.promptTokens + res.completionTokens;
+      spentThisProcess += tokens;
+      bumpMeta("llm_calls", 1);
+      bumpMeta("llm_tokens_prompt", res.promptTokens);
+      bumpMeta("llm_tokens_completion", res.completionTokens);
+      const json = extractJson(res.content);
       const data = opts.schema.parse(JSON.parse(json));
       try {
-        cachePut(cacheKey, text, s.model);
+        cachePut(cacheKey, res.content, s.model, {
+          promptTokens: res.promptTokens,
+          completionTokens: res.completionTokens,
+        });
       } catch {
         // 缓存写入失败不作废结果，仅放弃缓存
       }
       return { data, cached: false, cacheKey, outbound };
     } catch (err) {
+      if (err instanceof BudgetExceededError) throw err; // 预算超限不重试
       lastErr = err;
       if (attempt < maxRetries) {
         await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));

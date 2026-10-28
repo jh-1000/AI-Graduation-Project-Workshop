@@ -169,6 +169,71 @@ export async function analyzeNodes(
 }
 
 /** 术语落库：terms 表以 (project_id, slug) 唯一，跨版本 upsert */
+/** P3.2 混淆对比卡：易混淆术语对 + 对比维度（解决的问题/数据来源/修改位置/易混点） */
+const ConfusionSchema = z.object({
+  pairs: z.array(
+    z.object({
+      aSlug: z.string(),
+      bSlug: z.string(),
+      rows: z.array(z.object({ dim: z.string(), a: z.string(), b: z.string() })).min(2),
+    })
+  ),
+});
+
+/** P3.2 生成易混淆对比卡（写入 term_relations，CONFUSED_WITH） */
+export async function analyzeConfusions(
+  projectId: number,
+  version: string,
+  context: ContextPart[]
+): Promise<AnalyzeResult> {
+  const db = getDb();
+  const terms = db
+    .prepare("SELECT id, slug, title FROM terms WHERE project_id = ? ORDER BY id")
+    .all(projectId) as { id: number; slug: string; title: string }[];
+  if (terms.length < 2) return { ok: false, inserted: 0, reason: "not_enough_terms" };
+
+  const user = [
+    "任务：找出这个项目语境下最容易混淆的术语对（2-4 对）。",
+    "术语清单：" + terms.map((t) => `- ${t.slug}：${t.title}`).join("\n"),
+    "要求：每对给出 2-4 行对比，dim 是对比维度（如 解决的问题/数据来源/修改位置/易混点），a/b 分别是该维度下两个术语的说明。",
+    '输出 JSON：{"pairs":[{"aSlug":"...","bSlug":"...","rows":[{"dim":"...","a":"...","b":"..."}]}]}',
+    "aSlug/bSlug 必须使用上面清单里的 slug，不要编造。",
+  ].join("\n");
+
+  const data = await runLlm(projectId, version, "confusions", user, context, ConfusionSchema);
+  if (!data) return { ok: false, inserted: 0, reason: "llm_unavailable" };
+
+  // slug 匹配：精确优先，模糊（包含）兜底——模型可能返回近似 slug 或中文标题
+  const matchTerm = (v: string): number | null => {
+    const lower = v.toLowerCase().trim();
+    for (const t of terms) {
+      if (t.slug === lower || t.title === v) return t.id;
+    }
+    for (const t of terms) {
+      if (t.slug.includes(lower) || lower.includes(t.slug) || t.title.includes(lower)) return t.id;
+    }
+    return null;
+  };
+  const del = db.prepare(
+    "DELETE FROM term_relations WHERE related_type = 'confused_with' AND term_id IN (SELECT id FROM terms WHERE project_id = ?)"
+  );
+  const ins = db.prepare(
+    "INSERT INTO term_relations (term_id, related_type, target_kind, target_id, note) VALUES (?, 'confused_with', 'term', ?, ?)"
+  );
+  let inserted = 0;
+  db.transaction(() => {
+    del.run(projectId);
+    for (const pair of data.pairs) {
+      const a = matchTerm(pair.aSlug);
+      const b = matchTerm(pair.bSlug);
+      if (!a || !b || a === b) continue;
+      ins.run(a, b, JSON.stringify(pair.rows));
+      inserted += 1;
+    }
+  })();
+  return { ok: true, inserted };
+}
+
 export async function analyzeTerms(
   projectId: number,
   version: string,
@@ -222,6 +287,100 @@ export async function analyzeTerms(
 }
 
 /** 自测题 + 定位挑战落库 */
+/** P3 方向1：技术栈学习路径——从项目依赖自动生成概念链，锚到项目真实代码 */
+const TechPathSchema = z.object({
+  paths: z.array(
+    z.object({
+      tech: z.string().describe("技术名称，如 Express / React / TypeScript"),
+      version: z.string().nullable(),
+      reason: z.string().describe("为什么这个技术在本项目中重要"),
+      concepts: z.array(
+        z.object({
+          slug: z.string().describe("概念英文 slug，如 express-middleware"),
+          title: z.string().describe("概念中文名"),
+          why: z.string().describe("为什么需要理解这个概念才能看懂项目"),
+          projectRef: z.string().nullable().describe("项目中使用该概念的位置 file:line"),
+          prereqSlug: z.string().nullable().describe("前置概念的 slug，第一个概念为 null"),
+        })
+      ).min(3).max(8),
+    })
+  ).min(1).max(5),
+});
+
+export async function analyzeTechPath(
+  projectId: number,
+  version: string,
+  context: ContextPart[]
+): Promise<AnalyzeResult> {
+  const db = getDb();
+  // 从 evidence 读取依赖
+  const deps = db
+    .prepare("SELECT note FROM evidence WHERE project_id = ? AND note LIKE 'dep:%' ORDER BY id")
+    .all(projectId)
+    .map((r: any) => (r.note as string).replace("dep:", ""))
+    .slice(0, 30);
+  if (deps.length === 0) return { ok: false, inserted: 0, reason: "no_deps" };
+
+  const user = [
+    "任务：根据项目依赖生成技术栈学习路径。学习者需要理解这些技术才能看懂本项目。",
+    "项目依赖：" + deps.join(" · "),
+    "",
+    "要求：",
+    "1. 挑 3-5 个最核心的技术（框架/数据库/语言特性），每个生成 3-8 个有序概念；",
+    "2. 概念按学习顺序排列（前置 → 进阶），prereqSlug 指向前一个概念的 slug；",
+    "3. projectRef 引用本项目使用该概念的真实文件和行号；",
+    "4. 为什么需要理解这个概念——关联到项目里真实的功能，不要写通用教程。",
+    "",
+    '输出 JSON，必须使用精确英文字段名：',
+    '{"paths":[{"tech":"Express","version":"4.19.2","reason":"HTTP 框架","concepts":[{"slug":"express-middleware","title":"中间件管道","why":"...","projectRef":"src/server/index.ts:4","prereqSlug":null}]}]}',
+  ].join("\n");
+
+  const data = await runLlm(projectId, version, "techpath", user, context, TechPathSchema);
+  if (!data) return { ok: false, inserted: 0, reason: "llm_unavailable" };
+
+  // 清旧数据
+  db.prepare("DELETE FROM tech_path_items WHERE path_id IN (SELECT id FROM tech_paths WHERE project_id = ? AND analysis_version = ?)").run(projectId, version);
+  db.prepare("DELETE FROM tech_paths WHERE project_id = ? AND analysis_version = ?").run(projectId, version);
+
+  const insPath = db.prepare(
+    "INSERT INTO tech_paths (project_id, analysis_version, tech_name, tech_version, reason) VALUES (?, ?, ?, ?, ?)"
+  );
+  const insItem = db.prepare(
+    "INSERT INTO tech_path_items (path_id, seq, concept_title, concept_slug, why_needed, project_ref, prereq_item_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  );
+  let pathCount = 0;
+  let itemCount = 0;
+
+  db.transaction(() => {
+    for (const path of data.paths) {
+      const info = insPath.run(projectId, version, path.tech, path.version, path.reason);
+      const pathId = Number(info.lastInsertRowid);
+      let prevItemId: number | null = null;
+      let seq = 0;
+      for (const c of path.concepts) {
+        seq += 1;
+        // 把概念写入 nodes（kind='concept'），复用现有 KB/复习/FSRS 基建
+        const nodeInfo = db
+          .prepare(
+            "INSERT INTO nodes (project_id, analysis_version, slug, title, kind, summary, evidence_note, status) VALUES (?, ?, ?, 'concept', ?, ?, 'pending_review') ON CONFLICT(project_id, analysis_version, slug) DO UPDATE SET title = excluded.title, summary = excluded.summary"
+          )
+          .run(projectId, version, c.slug, c.title, c.why, c.projectRef);
+        const nodeId = nodeInfo.lastInsertRowid;
+        // 如果已有该 slug 的节点（可能与其他 LLM 阶段重复），用已有的
+        const existing = db
+          .prepare("SELECT id FROM nodes WHERE project_id = ? AND analysis_version = ? AND slug = ?")
+          .get(projectId, version, c.slug) as { id: number };
+        const nid = existing?.id ?? nodeId;
+        const itemInfo = insItem.run(pathId, seq, c.title, c.slug, c.why, c.projectRef, prevItemId);
+        prevItemId = Number(itemInfo.lastInsertRowid);
+        itemCount += 1;
+      }
+      pathCount += 1;
+    }
+  })();
+  return { ok: true, inserted: pathCount };
+}
+
 export async function analyzePractice(
   projectId: number,
   version: string,
@@ -283,5 +442,94 @@ export async function analyzePractice(
       inserted += 1;
     }
   })();
+  return { ok: true, inserted };
+}
+
+/** 架构总览：LLM 生成 architecture 类 repo_insights（技术栈/分层/模块划分） */
+export async function analyzeArchitecture(
+  projectId: number,
+  version: string,
+  context: ContextPart[]
+): Promise<AnalyzeResult> {
+  const user = [
+    "任务：给这个项目写一段「架构总览」。",
+    "要求：1) 技术栈一句话（前端/后端/存储各用什么）；2) 分层关系（页面→接口→数据怎么走）；3) 模块划分（有哪些顶层目录/包，各管什么）。",
+    '输出 JSON：{"architecture":{"stack":"...","layers":"...","modules":[{"name":"...","role":"..."}]}}',
+    "只依据给出的文件内容，不要臆测未给出的代码。",
+  ].join("\n");
+
+  const ArchSchema = z.object({
+    architecture: z.object({
+      stack: z.string().default(""),
+      layers: z.string().default(""),
+      modules: z.array(z.object({ name: z.string(), role: z.string().default("") })).default([]),
+    }),
+  });
+
+  const data = await runLlm(projectId, version, "architecture", user, context, ArchSchema);
+  if (!data) return { ok: false, inserted: 0, reason: "llm_unavailable" };
+
+  const db = getDb();
+  db.prepare("DELETE FROM repo_insights WHERE project_id = ? AND analysis_version = ? AND kind = 'architecture'")
+    .run(projectId, version);
+  const ins = db.prepare(
+    "INSERT INTO repo_insights (project_id, analysis_version, kind, title, content, evidence_note) VALUES (?, ?, 'architecture', '架构总览', ?, ?)"
+  );
+  const content = [
+    "技术栈：" + data.architecture.stack,
+    "",
+    "分层：" + data.architecture.layers,
+    "",
+    "模块划分：",
+    ...data.architecture.modules.map((m) => `- ${m.name}：${m.role}`),
+  ].join("\n");
+  ins.run(projectId, version, truncate(content, 4000), "由 LLM 基于选料文件生成");
+  return { ok: true, inserted: 1 };
+}
+
+/** 模块深挖：LLM 生成 module 类 repo_insights（每个核心模块的职责/机制/功能） */
+export async function analyzeModuleDeep(
+  projectId: number,
+  version: string,
+  context: ContextPart[]
+): Promise<AnalyzeResult> {
+  const user = [
+    "任务：挑出这个项目里 3-6 个核心模块，每个写一段深挖说明。",
+    "要求：每个模块写 1) 职责一句话；2) 核心机制（它怎么干活的）；3) 对外暴露什么能力。",
+    '输出 JSON：{"modules":[{"name":"...","duty":"...","mechanism":"...","exports":"..."}]}',
+    "只依据给出的文件内容。",
+  ].join("\n");
+
+  const ModSchema = z.object({
+    modules: z
+      .array(
+        z.object({
+          name: z.string().min(1),
+          duty: z.string().default(""),
+          mechanism: z.string().default(""),
+          exports: z.string().default(""),
+        })
+      )
+      .default([]),
+  });
+
+  const data = await runLlm(projectId, version, "module-deep", user, context, ModSchema);
+  if (!data) return { ok: false, inserted: 0, reason: "llm_unavailable" };
+
+  const db = getDb();
+  db.prepare("DELETE FROM repo_insights WHERE project_id = ? AND analysis_version = ? AND kind = 'module'")
+    .run(projectId, version);
+  const ins = db.prepare(
+    "INSERT INTO repo_insights (project_id, analysis_version, kind, title, content, evidence_note) VALUES (?, ?, 'module', ?, ?, ?)"
+  );
+  let inserted = 0;
+  const tx = db.transaction(() => {
+    for (const m of data.modules) {
+      const content = `职责：${m.duty}\n\n机制：${m.mechanism}\n\n对外：${m.exports}`;
+      ins.run(projectId, version, truncate(m.name, 200), truncate(content, 2000), "由 LLM 基于选料文件生成");
+      inserted++;
+    }
+  });
+  tx();
   return { ok: true, inserted };
 }
